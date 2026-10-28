@@ -1,0 +1,63 @@
+ID,Subject,Type,Work,Total work,Remaining work,Total remaining work,Status,Assignee,Priority,Finish date,Project,Parent
+1,Foundations: TanStack Start + Appwrite boilerplate,Epic,,79,,79,New,Apperside,Normal,,Task Manager,
+2,Project setup and tooling,Feature,,6,,6,New,Apperside,Normal,,Task Manager,Epic #1: Foundations: TanStack Start + Appwrite boilerplate
+3,Remove starter demo code and move work-scheduler to docs/reference,Task,0.5,0.5,0.5,0.5,New,Apperside,Normal,,Task Manager,Feature #2: Project setup and tooling
+4,Env schema in config/env.ts and .env.example,Task,1,1,1,1,New,Apperside,Normal,,Task Manager,Feature #2: Project setup and tooling
+5,Vitest + Testing Library + coverage thresholds,Task,1,1,1,1,New,Apperside,Normal,,Task Manager,Feature #2: Project setup and tooling
+6,Biome noExplicitAny + knip + lefthook hooks,Task,1,1,1,1,New,Apperside,Normal,,Task Manager,Feature #2: Project setup and tooling
+7,pnpm verify script with size-limit and Lighthouse on public pages,Task,1.5,1.5,1.5,1.5,New,Apperside,Normal,,Task Manager,Feature #2: Project setup and tooling
+8,Install tanstack-query-typed 0.2 and typed QueryClient in router context,Task,1,1,1,1,New,Apperside,Normal,,Task Manager,Feature #2: Project setup and tooling
+9,Appwrite layer,Feature,,9.5,,9.5,New,Apperside,Normal,,Task Manager,Epic #1: Foundations: TanStack Start + Appwrite boilerplate
+10,appwrite:types script and models.gen.ts from the live schema,Task,1,1,1,1,New,Apperside,Normal,,Task Manager,Feature #9: Appwrite layer
+11,Port patchAppwritePayload with the Polybank tests,Task,0.5,0.5,0.5,0.5,New,Apperside,Normal,,Task Manager,Feature #9: Appwrite layer
+12,Port AppTables typed wrapper with cursor-based listAllRows,Task,2,2,2,2,New,Apperside,Normal,,Task Manager,Feature #9: Appwrite layer
+13,Port admin bulk tables with ownerPermissions helper,Task,1.5,1.5,1.5,1.5,New,Apperside,Normal,,Task Manager,Feature #9: Appwrite layer
+14,Server clients: createUserClient and createAdminClient,Task,1,1,1,1,New,Apperside,Normal,,Task Manager,Feature #9: Appwrite layer
+15,toAppError mapping and i18n error keys with tests,Task,1.5,1.5,1.5,1.5,New,Apperside,Normal,,Task Manager,Feature #9: Appwrite layer
+16,Test kit: createTestContext typed fakes + fixtures + appwriteError,Task,2,2,2,2,New,Apperside,Normal,,Task Manager,Feature #9: Appwrite layer
+17,Session and server infrastructure,Feature,,10.5,,10.5,New,Apperside,Normal,,Task Manager,Epic #1: Foundations: TanStack Start + Appwrite boilerplate
+18,Session cookie module (set / read / clear) with tests,Task,1,1,1,1,New,Apperside,Normal,,Task Manager,Feature #17: Session and server infrastructure
+19,authMiddleware exposing context.appwrite and context.user,Task,2,2,2,2,New,Apperside,Normal,,Task Manager,Feature #17: Session and server infrastructure
+20,In-memory auth rate limiter with tests,Task,1.5,1.5,1.5,1.5,New,Apperside,Normal,,Task Manager,Feature #17: Session and server infrastructure
+21,Same-origin redirect sanitizer with tests,Task,0.5,0.5,0.5,0.5,New,Apperside,Normal,,Task Manager,Feature #17: Session and server infrastructure
+22,currentUser query and root beforeLoad prefetch,Task,1.5,1.5,1.5,1.5,New,Apperside,Normal,,Task Manager,Feature #17: Session and server infrastructure
+23,Route guards: resolveGuardRedirect + _authed and _app layouts,Task,2,2,2,2,New,Apperside,Normal,,Task Manager,Feature #17: Session and server infrastructure
+24,Browser appClient with JWT issue and refresh,Task,2,2,2,2,New,Apperside,Normal,,Task Manager,Feature #17: Session and server infrastructure
+25,Auth server functions,Feature,,12.5,,12.5,New,Apperside,Normal,,Task Manager,Epic #1: Foundations: TanStack Start + Appwrite boilerplate
+26,signUp and signIn handlers with tests,Task,2,2,2,2,New,Apperside,Normal,,Task Manager,Feature #25: Auth server functions
+27,signOut and signOutEverywhere handlers with tests,Task,1,1,1,1,New,Apperside,Normal,,Task Manager,Feature #25: Auth server functions
+28,Guest session and upgradeGuest handlers with tests,Task,2,2,2,2,New,Apperside,Normal,,Task Manager,Feature #25: Auth server functions
+29,signInAndMergeGuest with onGuestMerge extension point,Task,2,2,2,2,New,Apperside,Normal,,Task Manager,Feature #25: Auth server functions
+30,Password reset request and confirm handlers with tests,Task,1.5,1.5,1.5,1.5,New,Apperside,Normal,,Task Manager,Feature #25: Auth server functions
+31,Email verification send and confirm handlers with tests,Task,1,1,1,1,New,Apperside,Normal,,Task Manager,Feature #25: Auth server functions
+32,Account handlers: password / email / name / preferences,Task,2,2,2,2,New,Apperside,Normal,,Task Manager,Feature #25: Auth server functions
+33,listSessions and completeOnboarding handlers with tests,Task,1,1,1,1,New,Apperside,Normal,,Task Manager,Feature #25: Auth server functions
+34,Design system and app shell,Feature,,11.5,,11.5,New,Apperside,Normal,,Task Manager,Epic #1: Foundations: TanStack Start + Appwrite boilerplate
+35,Design tokens light and dark in Tailwind v4 + Inter font,Task,2,2,2,2,New,Apperside,Normal,,Task Manager,Feature #34: Design system and app shell
+36,Copy the required shadcn/ui components from Reperio,Task,1.5,1.5,1.5,1.5,New,Apperside,Normal,,Task Manager,Feature #34: Design system and app shell
+37,Theme preference with no-flash init (cookie + prefs),Task,1,1,1,1,New,Apperside,Normal,,Task Manager,Feature #34: Design system and app shell
+38,Responsive AppShell: sidebar / icon rail / mobile drawer,Task,4,4,4,4,New,Apperside,Normal,,Task Manager,Feature #34: Design system and app shell
+39,AuthLayout and GuestBanner,Task,1.5,1.5,1.5,1.5,New,Apperside,Normal,,Task Manager,Feature #34: Design system and app shell
+40,Route error and not-found components + toasts + skeletons,Task,1.5,1.5,1.5,1.5,New,Apperside,Normal,,Task Manager,Feature #34: Design system and app shell
+41,Internationalization,Feature,,3,,3,New,Apperside,Normal,,Task Manager,Epic #1: Foundations: TanStack Start + Appwrite boilerplate
+42,i18next setup with server-side language resolution,Task,2,2,2,2,New,Apperside,Normal,,Task Manager,Feature #41: Internationalization
+43,Typed translation keys and en/it parity check,Task,1,1,1,1,New,Apperside,Normal,,Task Manager,Feature #41: Internationalization
+44,Forms,Feature,,5,,5,New,Apperside,Normal,,Task Manager,Epic #1: Foundations: TanStack Start + Appwrite boilerplate
+45,useAppForm with TextField / PasswordField / SubmitButton,Task,3,3,3,3,New,Apperside,Normal,,Task Manager,Feature #44: Forms
+46,Form tests: blur validation / pending / server errors / axe,Task,2,2,2,2,New,Apperside,Normal,,Task Manager,Feature #44: Forms
+47,Pages,Feature,,13,,13,New,Apperside,Normal,,Task Manager,Epic #1: Foundations: TanStack Start + Appwrite boilerplate
+48,Login page,Task,1.5,1.5,1.5,1.5,New,Apperside,Normal,,Task Manager,Feature #47: Pages
+49,Signup page,Task,1.5,1.5,1.5,1.5,New,Apperside,Normal,,Task Manager,Feature #47: Pages
+50,Forgot password and reset password pages,Task,2,2,2,2,New,Apperside,Normal,,Task Manager,Feature #47: Pages
+51,Verify email page,Task,1,1,1,1,New,Apperside,Normal,,Task Manager,Feature #47: Pages
+52,Onboarding placeholder page,Task,1,1,1,1,New,Apperside,Normal,,Task Manager,Feature #47: Pages
+53,Settings: Profile tab,Task,1.5,1.5,1.5,1.5,New,Apperside,Normal,,Task Manager,Feature #47: Pages
+54,Settings: Security tab (password and sessions),Task,2.5,2.5,2.5,2.5,New,Apperside,Normal,,Task Manager,Feature #47: Pages
+55,Settings: Preferences tab (language and theme),Task,1,1,1,1,New,Apperside,Normal,,Task Manager,Feature #47: Pages
+56,Home placeholder and user menu,Task,1,1,1,1,New,Apperside,Normal,,Task Manager,Feature #47: Pages
+57,Release readiness,Feature,,8,,8,New,Apperside,Normal,,Task Manager,Epic #1: Foundations: TanStack Start + Appwrite boilerplate
+58,Dockerfile and docker-compose (Nitro node-server),Task,1.5,1.5,1.5,1.5,New,Apperside,Normal,,Task Manager,Feature #57: Release readiness
+59,Responsive review at 375 / 768 / 1024 / 1440 in light and dark,Task,2,2,2,2,New,Apperside,Normal,,Task Manager,Feature #57: Release readiness
+60,Lighthouse and bundle budgets green,Task,2,2,2,2,New,Apperside,Normal,,Task Manager,Feature #57: Release readiness
+61,Manual smoke checklist against the real Appwrite,Task,1.5,1.5,1.5,1.5,New,Apperside,Normal,,Task Manager,Feature #57: Release readiness
+62,Boilerplate README,Task,1,1,1,1,New,Apperside,Normal,,Task Manager,Feature #57: Release readiness

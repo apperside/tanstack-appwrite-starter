@@ -35,7 +35,7 @@ Success means:
 | D6 | **TanStack Form + zod.** Form and server function share one schema. | Native to the stack. Validation is defined once and enforced on both sides. |
 | D7 | **i18next, en + it, language resolved on the server.** | No hydration mismatch, and typed keys. |
 | D8 | **Self-hosted Node (Nitro node-server preset) + Dockerfile.** | Runs next to the self-hosted Appwrite. Allows a single-instance in-memory rate limiter. |
-| D9 | **Separate Appwrite project `taskmanager-test`** for integration and e2e tests. | Test users and data never mix with real ones. |
+| D9 | **Unit tests only for now, with typed fakes for Appwrite.** Integration and e2e tests come later. | Fast, deterministic and backend-free. Fakes are typed from the SDK, so they break at compile time when Appwrite's API changes. |
 | D10 | **No CI and no git remote for now.** Quality gates run locally via `pnpm verify` and lefthook hooks. | The repo is local only. The same script plugs into CI later. |
 
 ## 3. Architecture
@@ -244,48 +244,75 @@ const { data: user } = useSuspenseQuery(currentUserQuery);
 |---|---|---|
 | Speed | Lighthouse mobile ≥ 95 on every category; LCP < 1.5 s; CLS < 0.05 (throttled 4G) | Lighthouse CI (local) on the production build |
 | Bundle | Initial JS ≤ 120 KB gzip on public and auth pages | `size-limit` |
-| Feel | Route data prefetched on intent; no spinner where a skeleton fits; optimistic mutations | Review + e2e |
-| Responsive | Every page correct at 375 / 768 / 1024 / 1440, light and dark; no horizontal scroll; touch targets ≥ 44px | Playwright `toHaveScreenshot` baselines |
-| A11y | Zero serious or critical violations; full keyboard use; visible focus | `@axe-core/playwright` on every page |
+| Feel | Route data prefetched on intent; no spinner where a skeleton fits; optimistic mutations | Review + UI tests on optimistic updates |
+| Responsive | Every page correct at 375 / 768 / 1024 / 1440, light and dark; no horizontal scroll; touch targets ≥ 44px | Browser screenshots at each breakpoint, reviewed during implementation (automated baselines arrive with e2e) |
+| A11y | Zero serious or critical violations; full keyboard use; visible focus | `vitest-axe` on every page-level component, plus keyboard-only review |
 | Code | TS strict, no `any`, Biome clean, no unused files, exports or deps | `tsc`, Biome (`noExplicitAny` = error), knip |
+| Tests | Coverage ≥ 90% lines/branches on `lib/`, `server/`, `features/**/*.functions.ts`; ≥ 80% on components | Vitest coverage thresholds |
 | i18n | No hard-coded UI strings; en and it complete | Typed keys + a key-parity check |
 
 ## 9. Testing
 
-| Level | Tool | Scope |
+All tests are **unit tests with Appwrite faked**: no network, no backend, no test project. Integration and e2e tests against a real Appwrite come in a later phase.
+
+### 9.1 One seam
+
+Server functions receive Appwrite through `context` (§5.1), never through imports. Each server function is therefore an exported **handler** plus its wiring:
+
+```ts
+export const signInHandler = async ({ data, context }: HandlerArgs<SignInInput>) => { /* ... */ };
+
+export const signIn = createServerFn({ method: 'POST' })
+  .middleware([authMiddleware])
+  .validator(signInSchema)
+  .handler(signInHandler);
+```
+
+Tests call the handler directly with a fake context. Module mocking (`vi.mock`) is allowed in exactly two places:
+- `session-cookie.server.ts`, whose cookie writes go through Start's request APIs;
+- `*.functions.ts` modules, when a UI test needs to replace server functions.
+
+### 9.2 Layers
+
+| Layer | Scope | How |
 |---|---|---|
-| Unit | Vitest | `patchAppwritePayload` (ported tests), `toAppError`, env schema, rate limiter, redirect sanitizer, zod schemas |
-| Component | Vitest + Testing Library (jsdom) | Forms (blur validation, pending, server-error mapping), guards and redirects |
-| Integration | Vitest against `taskmanager-test` | Real server functions: signup → session → `account.get`; password change; guest → upgrade; guest → merge; row permissions (user A can't read user B's rows). Each test creates its users with the admin key and deletes them afterwards. |
-| E2E | Playwright against `taskmanager-test` | Signup, login/logout, guards, settings, guest flow, screenshots, axe |
+| **Pure logic** | `patchAppwritePayload` (Polybank tests ported), `toAppError`, rate limiter, redirect sanitizer, env schema, zod schemas, guard decisions (`resolveGuardRedirect(user, config)` is a pure function) | Plain tests, no doubles |
+| **Server handlers** | Every server function: which Appwrite calls are made with which payload, which cookie is set or cleared, what is returned, how Appwrite errors map to `AppError` | `createTestContext()` fake context |
+| **Browser client** | JWT refresh after 10 min, single in-flight refresh, retry once on 401 | Fake timers + fake `Account` |
+| **UI** | Forms (blur validation, pending state, translated server errors), guard redirects, AppShell behavior per breakpoint, optimistic updates and rollback | Testing Library (jsdom), `vitest-axe` |
 
-Known limits:
-- Email links can't be read automatically, so e2e marks email as verified through the admin API (`users.updateEmailVerification`).
-- The reset-password page is tested with a mocked server function. A real reset email is checked manually before each release.
-- A test inbox (e.g. Mailpit) is out of scope for now.
+### 9.3 Keeping fakes honest
 
-### Local quality gates
+- **Typed fakes.** `createTestContext({ user?, prefs? })` builds `context.appwrite.user()` and `admin()` from `vi.fn()`s typed against the real SDK classes (`Pick<Account, 'createEmailPasswordSession' | ...>`). An SDK signature change breaks compilation.
+- **Typed fixtures.** One builder per shape, shared by all tests: `aUser()`, `aSession()`, `aRow(table, overrides)`. They return `Models.User`, `Models.Session` and the generated row types, with sensible defaults and overrides.
+- **Real errors.** `appwriteError(type)` constructs a genuine `AppwriteException` with the right `type` and `code` for that error.
+- **Assert behavior, not wiring.** Tests check outputs, cookies and outgoing payloads, never internal call order.
 
-- `pnpm verify`: `typecheck → biome check → knip → test:unit → build → size-limit → test:integration → test:e2e → lighthouse`. This script is what a future CI will run.
-- lefthook: pre-commit runs Biome on staged files; pre-push runs typecheck + unit tests.
+### 9.4 Known gaps until e2e
+
+Fakes can't prove Appwrite behaves as assumed: row permissions, guest upgrade keeping the same user id, real emails. Before closing each phase, a **manual smoke checklist** is run against the real instance: sign up, log in/out, guest → upgrade, guest → merge, forgot/reset password, verify email, change password/email, sign out everywhere.
+
+### 9.5 Local quality gates
+
+- `pnpm verify`: `typecheck → biome check → knip → test (with coverage thresholds) → build → size-limit → lighthouse (public pages)`. This is what a future CI will run.
+- lefthook: pre-commit runs Biome on staged files; pre-push runs typecheck + tests.
 - **Definition of Done (per feature):** `pnpm verify` green, screenshots reviewed at all 4 breakpoints, no new strings outside i18n, no duplicated logic.
 
 ## 10. Configuration and deploy
 
 - `.env.local` (gitignored): `VITE_APPWRITE_ENDPOINT`, `VITE_APPWRITE_PROJECT_ID`, `VITE_APPWRITE_DATABASE_ID`, `APPWRITE_API_KEY`, `APP_URL`, `REQUIRE_EMAIL_VERIFICATION` (default `false`: verification is offered but not enforced).
-- `.env.test.local` (gitignored): the same keys for `taskmanager-test`.
 - `.env.example` (committed): every key, no values.
 - `Dockerfile` (multi-stage, Node 24, Nitro node-server output) + `docker-compose.yml` for the app only, since Appwrite is already self-hosted.
 
 ## 11. Prerequisites (before implementation)
 
-1. You create the Appwrite project `taskmanager-test` and share its project id and API key. I push the schema with the CLI.
-2. `tanstack-query-typed@0.2.0` is published (PR #6 merged, release workflow in PR #7).
-3. SMTP is configured on the Appwrite instance for the recovery and verification emails (a manual check, needed only to try those flows for real).
+1. `tanstack-query-typed@0.2.0` is published: it's staged on npm and awaiting maintainer approval.
+2. SMTP is configured on the Appwrite instance for the recovery and verification emails (needed only for the manual smoke checklist).
 
 ## 12. Out of scope
 
 - The task manager: tree, scheduler, availability, Gantt (sub-project 2).
 - OAuth providers, MFA, teams and invitations, account deletion.
-- CI, a git remote, a test inbox.
+- Integration and e2e tests, automated screenshot baselines, a test inbox (later phase).
+- CI and a git remote.
 - Multi-instance deploy (it would need a shared store for the rate limiter).

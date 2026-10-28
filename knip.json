@@ -1,0 +1,21 @@
+{
+	"$schema": "https://unpkg.com/knip@6/schema.json",
+	"entry": [
+		"src/router.tsx",
+		"src/start.ts",
+		"src/routes/**/*.tsx",
+		"scripts/*.ts",
+		// shadcn kit: each file keeps its full component API (unused parts tree-shake away).
+		// Entries, not ignores, so their deps still count as used.
+		"src/components/ui/*.tsx"
+	],
+	"project": ["src/**/*.{ts,tsx}", "scripts/**/*.ts", "*.ts"],
+	"ignore": ["src/lib/appwrite/generated/**", "src/routeTree.gen.ts"],
+	"ignoreDependencies": [
+		// Referenced from styles.css only (knip does not follow CSS).
+		"@fontsource-variable/inter",
+		"tailwindcss",
+		"@tailwindcss/typography",
+		"tw-animate-css"
+	]
+}

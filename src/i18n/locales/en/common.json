@@ -1,0 +1,86 @@
+{
+	"appName": "My App",
+	"appDescription": "Sign in to My App to pick up where you left off.",
+	"actions": {
+		"save": "Save",
+		"cancel": "Cancel",
+		"continue": "Continue",
+		"back": "Back",
+		"close": "Close",
+		"retry": "Try again",
+		"edit": "Edit",
+		"delete": "Delete",
+		"confirm": "Confirm"
+	},
+	"states": {
+		"loading": "Loading…",
+		"saving": "Saving…",
+		"saved": "Saved",
+		"empty": "Nothing here yet"
+	},
+	"sidebar": {
+		"toggle": "Toggle sidebar",
+		"title": "Navigation",
+		"description": "Main navigation menu",
+		"open": "Open navigation",
+		"close": "Close sidebar"
+	},
+	"form": {
+		"showPassword": "Show password",
+		"passwordStrength": {
+			"label": "Password strength: {{strength}}",
+			"0": "too weak",
+			"1": "weak",
+			"2": "fair",
+			"3": "good",
+			"4": "strong"
+		},
+		"validation": {
+			"required": "This field is required",
+			"email": "Enter a valid email address",
+			"tooShort": "Use at least {{minimum}} characters",
+			"tooLong": "Use at most {{maximum}} characters",
+			"invalid": "Check this value"
+		}
+	},
+	"guestBanner": {
+		"message": "You're using a guest account. Save it to keep your work and sign in from any device.",
+		"action": "Save account",
+		"dismiss": "Dismiss"
+	},
+	"errorPage": {
+		"title": "Something went wrong"
+	},
+	"notFound": {
+		"title": "Page not found",
+		"description": "The page you're looking for doesn't exist or has been moved.",
+		"home": "Go to home"
+	},
+	"nav": {
+		"label": "Main",
+		"skip": "Skip to content",
+		"home": "Home",
+		"settings": "Settings"
+	},
+	"home": {
+		"welcome": "Welcome, {{name}}",
+		"welcomeAnonymous": "Welcome",
+		"intro": "This is your home. What you build will show up here."
+	},
+	"userMenu": {
+		"trigger": "Account menu",
+		"guest": "Guest",
+		"guestHint": "Account not saved yet",
+		"theme": "Theme",
+		"signOut": "Sign out"
+	},
+	"theme": {
+		"light": "Light",
+		"dark": "Dark",
+		"system": "System"
+	},
+	"language": {
+		"en": "English",
+		"it": "Italiano"
+	}
+}

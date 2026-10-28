@@ -1,0 +1,6 @@
+allowBuilds:
+  esbuild: true
+  lightningcss: true
+  lefthook: true
+minimumReleaseAgeExclude:
+  - tanstack-query-typed@0.2.0

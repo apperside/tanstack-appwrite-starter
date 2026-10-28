@@ -1,0 +1,12 @@
+{
+	"INVALID_CREDENTIALS": "Email e password non corrispondono. Controllale e riprova.",
+	"EMAIL_TAKEN": "Esiste già un account con questa email. Accedi oppure usa un'altra email.",
+	"WEAK_PASSWORD": "Questa password è troppo facile da indovinare. Scegline una più lunga che non hai mai usato.",
+	"INVALID_TOKEN": "Questo link non è valido o è scaduto. Richiedine uno nuovo e riprova.",
+	"UNAUTHENTICATED": "La sessione è scaduta. Accedi di nuovo per continuare.",
+	"FORBIDDEN": "Non hai i permessi per eseguire questa operazione.",
+	"RATE_LIMITED": "Troppi tentativi. Attendi qualche minuto e riprova.",
+	"NOT_FOUND": "Non abbiamo trovato ciò che cercavi. Potrebbe essere stato spostato o eliminato.",
+	"NETWORK": "Impossibile raggiungere il server. Controlla la connessione e riprova.",
+	"UNKNOWN": "Qualcosa è andato storto da parte nostra. Riprova tra un momento."
+}

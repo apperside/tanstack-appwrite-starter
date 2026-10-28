@@ -1,0 +1,78 @@
+{
+	"settings": {
+		"title": "Settings",
+		"subtitle": "Manage your profile, security and preferences.",
+		"tabs": {
+			"label": "Settings sections",
+			"profile": "Profile",
+			"security": "Security",
+			"preferences": "Preferences"
+		}
+	},
+	"wrongPassword": "That password isn't right. Check it and try again.",
+	"profile": {
+		"name": {
+			"title": "Name",
+			"description": "How you appear across the app.",
+			"label": "Full name",
+			"hint": "Up to {{maximum}} characters.",
+			"submit": "Save name",
+			"saved": "Name updated"
+		},
+		"email": {
+			"title": "Email",
+			"description": "You sign in with {{email}}. We'll send a verification link to the new address.",
+			"label": "New email",
+			"password": "Current password",
+			"hint": "Your password confirms it's you.",
+			"submit": "Change email",
+			"saved": "Email updated. Check {{email}} for a verification link."
+		}
+	},
+	"security": {
+		"password": {
+			"title": "Password",
+			"description": "Use a long passphrase you don't use anywhere else.",
+			"current": "Current password",
+			"new": "New password",
+			"hint": "At least 8 characters.",
+			"submit": "Update password",
+			"saved": "Password updated"
+		},
+		"sessions": {
+			"title": "Sessions",
+			"description": "Devices signed in to your account.",
+			"current": "This device",
+			"unknownClient": "Unknown browser",
+			"clientOnOs": "{{client}} on {{os}}",
+			"signedIn": "Signed in {{date}}",
+			"device": {
+				"desktop": "Desktop",
+				"smartphone": "Phone",
+				"tablet": "Tablet"
+			}
+		},
+		"signOutEverywhere": {
+			"hint": "Signs you out on every device, including this one.",
+			"action": "Sign out everywhere",
+			"title": "Sign out everywhere?",
+			"description": "You'll be signed out on all your devices, including this one, and will need to sign in again.",
+			"confirm": "Sign out everywhere"
+		}
+	},
+	"preferences": {
+		"language": {
+			"title": "Language",
+			"description": "The language the app is shown in."
+		},
+		"theme": {
+			"title": "Theme",
+			"description": "How the app looks. System follows your device's setting."
+		}
+	},
+	"saveAccount": {
+		"title": "Save your account",
+		"description": "You're using a guest account. Add an email and password to keep your work, sign in from any device and manage your profile and security here.",
+		"action": "Save account"
+	}
+}

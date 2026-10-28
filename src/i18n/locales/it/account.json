@@ -1,0 +1,78 @@
+{
+	"settings": {
+		"title": "Impostazioni",
+		"subtitle": "Gestisci profilo, sicurezza e preferenze.",
+		"tabs": {
+			"label": "Sezioni delle impostazioni",
+			"profile": "Profilo",
+			"security": "Sicurezza",
+			"preferences": "Preferenze"
+		}
+	},
+	"wrongPassword": "La password non è corretta. Controllala e riprova.",
+	"profile": {
+		"name": {
+			"title": "Nome",
+			"description": "Come appari nell'app.",
+			"label": "Nome e cognome",
+			"hint": "Fino a {{maximum}} caratteri.",
+			"submit": "Salva nome",
+			"saved": "Nome aggiornato"
+		},
+		"email": {
+			"title": "Email",
+			"description": "Accedi con {{email}}. Invieremo un link di verifica al nuovo indirizzo.",
+			"label": "Nuova email",
+			"password": "Password attuale",
+			"hint": "La password conferma che sei tu.",
+			"submit": "Cambia email",
+			"saved": "Email aggiornata. Controlla {{email}} per il link di verifica."
+		}
+	},
+	"security": {
+		"password": {
+			"title": "Password",
+			"description": "Usa una frase lunga che non usi altrove.",
+			"current": "Password attuale",
+			"new": "Nuova password",
+			"hint": "Almeno 8 caratteri.",
+			"submit": "Aggiorna password",
+			"saved": "Password aggiornata"
+		},
+		"sessions": {
+			"title": "Sessioni",
+			"description": "I dispositivi con cui hai effettuato l'accesso.",
+			"current": "Questo dispositivo",
+			"unknownClient": "Browser sconosciuto",
+			"clientOnOs": "{{client}} su {{os}}",
+			"signedIn": "Accesso il {{date}}",
+			"device": {
+				"desktop": "Computer",
+				"smartphone": "Telefono",
+				"tablet": "Tablet"
+			}
+		},
+		"signOutEverywhere": {
+			"hint": "Esci da tutti i dispositivi, compreso questo.",
+			"action": "Esci ovunque",
+			"title": "Uscire ovunque?",
+			"description": "Uscirai da tutti i tuoi dispositivi, compreso questo, e dovrai accedere di nuovo.",
+			"confirm": "Esci ovunque"
+		}
+	},
+	"preferences": {
+		"language": {
+			"title": "Lingua",
+			"description": "La lingua in cui viene mostrata l'app."
+		},
+		"theme": {
+			"title": "Tema",
+			"description": "L'aspetto dell'app. Sistema segue l'impostazione del dispositivo."
+		}
+	},
+	"saveAccount": {
+		"title": "Salva il tuo account",
+		"description": "Stai usando un account ospite. Aggiungi email e password per non perdere il tuo lavoro, accedere da qualsiasi dispositivo e gestire qui profilo e sicurezza.",
+		"action": "Salva account"
+	}
+}

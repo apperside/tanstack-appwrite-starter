@@ -1,0 +1,11 @@
+node_modules
+.output
+.git
+coverage
+.superpowers
+docs
+.env*
+*.local
+.claude
+.agents
+.vscode

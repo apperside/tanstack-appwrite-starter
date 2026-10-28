@@ -1,0 +1,86 @@
+{
+	"appName": "My App",
+	"appDescription": "Accedi a My App per riprendere da dove avevi lasciato.",
+	"actions": {
+		"save": "Salva",
+		"cancel": "Annulla",
+		"continue": "Continua",
+		"back": "Indietro",
+		"close": "Chiudi",
+		"retry": "Riprova",
+		"edit": "Modifica",
+		"delete": "Elimina",
+		"confirm": "Conferma"
+	},
+	"states": {
+		"loading": "Caricamento…",
+		"saving": "Salvataggio…",
+		"saved": "Salvato",
+		"empty": "Ancora niente qui"
+	},
+	"sidebar": {
+		"toggle": "Mostra/nascondi barra laterale",
+		"title": "Navigazione",
+		"description": "Menu di navigazione principale",
+		"open": "Apri navigazione",
+		"close": "Chiudi barra laterale"
+	},
+	"form": {
+		"showPassword": "Mostra password",
+		"passwordStrength": {
+			"label": "Robustezza della password: {{strength}}",
+			"0": "troppo debole",
+			"1": "debole",
+			"2": "discreta",
+			"3": "buona",
+			"4": "ottima"
+		},
+		"validation": {
+			"required": "Campo obbligatorio",
+			"email": "Inserisci un indirizzo email valido",
+			"tooShort": "Usa almeno {{minimum}} caratteri",
+			"tooLong": "Usa al massimo {{maximum}} caratteri",
+			"invalid": "Controlla questo valore"
+		}
+	},
+	"guestBanner": {
+		"message": "Stai usando un account ospite. Salvalo per non perdere il tuo lavoro e accedere da qualsiasi dispositivo.",
+		"action": "Salva account",
+		"dismiss": "Chiudi"
+	},
+	"errorPage": {
+		"title": "Qualcosa è andato storto"
+	},
+	"notFound": {
+		"title": "Pagina non trovata",
+		"description": "La pagina che cerchi non esiste o è stata spostata.",
+		"home": "Vai alla home"
+	},
+	"nav": {
+		"label": "Principale",
+		"skip": "Vai al contenuto",
+		"home": "Home",
+		"settings": "Impostazioni"
+	},
+	"home": {
+		"welcome": "Benvenuto, {{name}}",
+		"welcomeAnonymous": "Benvenuto",
+		"intro": "Questa è la tua home. Qui comparirà ciò che crei."
+	},
+	"userMenu": {
+		"trigger": "Menu account",
+		"guest": "Ospite",
+		"guestHint": "Account non ancora salvato",
+		"theme": "Tema",
+		"signOut": "Esci"
+	},
+	"theme": {
+		"light": "Chiaro",
+		"dark": "Scuro",
+		"system": "Sistema"
+	},
+	"language": {
+		"en": "English",
+		"it": "Italiano"
+	}
+}

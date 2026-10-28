@@ -272,7 +272,7 @@ Known limits:
 
 ## 10. Configuration and deploy
 
-- `.env.local` (gitignored): `VITE_APPWRITE_ENDPOINT`, `VITE_APPWRITE_PROJECT_ID`, `VITE_APPWRITE_DATABASE_ID`, `APPWRITE_API_KEY`, `APP_URL`, `REQUIRE_EMAIL_VERIFICATION`.
+- `.env.local` (gitignored): `VITE_APPWRITE_ENDPOINT`, `VITE_APPWRITE_PROJECT_ID`, `VITE_APPWRITE_DATABASE_ID`, `APPWRITE_API_KEY`, `APP_URL`, `REQUIRE_EMAIL_VERIFICATION` (default `false`: verification is offered but not enforced).
 - `.env.test.local` (gitignored): the same keys for `taskmanager-test`.
 - `.env.example` (committed): every key, no values.
 - `Dockerfile` (multi-stage, Node 24, Nitro node-server output) + `docker-compose.yml` for the app only, since Appwrite is already self-hosted.

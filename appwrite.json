@@ -1,0 +1,902 @@
+{
+  "projectId": "6ae0a86b00082520807c",
+  "databases": [
+    {
+      "$id": "taskmanager",
+      "name": "Task manager",
+      "enabled": true
+    }
+  ],
+  "collections": [
+    {
+      "$id": "members",
+      "$permissions": [],
+      "databaseId": "taskmanager",
+      "name": "Members",
+      "enabled": true,
+      "documentSecurity": false,
+      "attributes": [
+        {
+          "key": "displayName",
+          "type": "string",
+          "required": true,
+          "array": false,
+          "size": 128,
+          "default": null
+        },
+        {
+          "key": "timezone",
+          "type": "string",
+          "required": false,
+          "array": false,
+          "size": 64,
+          "default": "Asia/Ho_Chi_Minh"
+        },
+        {
+          "key": "active",
+          "type": "boolean",
+          "required": false,
+          "array": false,
+          "default": true
+        }
+      ],
+      "indexes": [
+        {
+          "key": "idx_active",
+          "type": "key",
+          "status": "available",
+          "attributes": [
+            "active"
+          ],
+          "orders": [
+            "ASC"
+          ]
+        }
+      ]
+    },
+    {
+      "$id": "availability_rules",
+      "$permissions": [],
+      "databaseId": "taskmanager",
+      "name": "Availability rules",
+      "enabled": true,
+      "documentSecurity": false,
+      "attributes": [
+        {
+          "key": "memberId",
+          "type": "string",
+          "required": true,
+          "array": false,
+          "size": 36,
+          "default": null
+        },
+        {
+          "key": "weekday",
+          "type": "string",
+          "format": "enum",
+          "elements": [
+            "mon",
+            "tue",
+            "wed",
+            "thu",
+            "fri",
+            "sat",
+            "sun"
+          ],
+          "required": true,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "startMinute",
+          "type": "integer",
+          "required": true,
+          "array": false,
+          "default": null,
+          "min": 0,
+          "max": 1439
+        },
+        {
+          "key": "endMinute",
+          "type": "integer",
+          "required": true,
+          "array": false,
+          "default": null,
+          "min": 1,
+          "max": 1440
+        },
+        {
+          "key": "validFrom",
+          "type": "string",
+          "required": false,
+          "array": false,
+          "size": 10,
+          "default": null
+        },
+        {
+          "key": "validTo",
+          "type": "string",
+          "required": false,
+          "array": false,
+          "size": 10,
+          "default": null
+        }
+      ],
+      "indexes": [
+        {
+          "key": "idx_member_weekday",
+          "type": "key",
+          "status": "available",
+          "attributes": [
+            "memberId",
+            "weekday"
+          ],
+          "orders": [
+            "ASC",
+            "ASC"
+          ]
+        }
+      ]
+    },
+    {
+      "$id": "availability_exceptions",
+      "$permissions": [],
+      "databaseId": "taskmanager",
+      "name": "Availability exceptions",
+      "enabled": true,
+      "documentSecurity": false,
+      "attributes": [
+        {
+          "key": "memberId",
+          "type": "string",
+          "required": true,
+          "array": false,
+          "size": 36,
+          "default": null
+        },
+        {
+          "key": "date",
+          "type": "string",
+          "required": true,
+          "array": false,
+          "size": 10,
+          "default": null
+        },
+        {
+          "key": "kind",
+          "type": "string",
+          "format": "enum",
+          "elements": [
+            "unavailable",
+            "extra"
+          ],
+          "required": true,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "startMinute",
+          "type": "integer",
+          "required": false,
+          "array": false,
+          "default": null,
+          "min": 0,
+          "max": 1439
+        },
+        {
+          "key": "endMinute",
+          "type": "integer",
+          "required": false,
+          "array": false,
+          "default": null,
+          "min": 1,
+          "max": 1440
+        },
+        {
+          "key": "note",
+          "type": "string",
+          "required": false,
+          "array": false,
+          "size": 500,
+          "default": null
+        }
+      ],
+      "indexes": [
+        {
+          "key": "idx_member_date",
+          "type": "key",
+          "status": "available",
+          "attributes": [
+            "memberId",
+            "date"
+          ],
+          "orders": [
+            "ASC",
+            "ASC"
+          ]
+        }
+      ]
+    },
+    {
+      "$id": "projects",
+      "$permissions": [],
+      "databaseId": "taskmanager",
+      "name": "Projects",
+      "enabled": true,
+      "documentSecurity": false,
+      "attributes": [
+        {
+          "key": "name",
+          "type": "string",
+          "required": true,
+          "array": false,
+          "size": 255,
+          "default": null
+        },
+        {
+          "key": "color",
+          "type": "string",
+          "required": false,
+          "array": false,
+          "size": 9,
+          "default": null
+        },
+        {
+          "key": "ownerId",
+          "type": "string",
+          "required": true,
+          "array": false,
+          "size": 36,
+          "default": null
+        },
+        {
+          "key": "archived",
+          "type": "boolean",
+          "required": false,
+          "array": false,
+          "default": false
+        },
+        {
+          "key": "externalSource",
+          "type": "string",
+          "required": false,
+          "array": false,
+          "size": 32,
+          "default": null
+        },
+        {
+          "key": "externalId",
+          "type": "string",
+          "required": false,
+          "array": false,
+          "size": 64,
+          "default": null
+        }
+      ],
+      "indexes": [
+        {
+          "key": "idx_owner",
+          "type": "key",
+          "status": "available",
+          "attributes": [
+            "ownerId"
+          ],
+          "orders": [
+            "ASC"
+          ]
+        },
+        {
+          "key": "uq_external",
+          "type": "unique",
+          "status": "available",
+          "attributes": [
+            "externalSource",
+            "externalId"
+          ],
+          "orders": [
+            "ASC",
+            "ASC"
+          ]
+        }
+      ]
+    },
+    {
+      "$id": "tasks",
+      "$permissions": [],
+      "databaseId": "taskmanager",
+      "name": "Tasks",
+      "enabled": true,
+      "documentSecurity": false,
+      "attributes": [
+        {
+          "key": "projectId",
+          "type": "string",
+          "required": true,
+          "array": false,
+          "size": 36,
+          "default": null
+        },
+        {
+          "key": "parentId",
+          "type": "string",
+          "required": false,
+          "array": false,
+          "size": 36,
+          "default": null
+        },
+        {
+          "key": "depth",
+          "type": "integer",
+          "required": false,
+          "array": false,
+          "default": 0,
+          "min": 0
+        },
+        {
+          "key": "isLeaf",
+          "type": "boolean",
+          "required": false,
+          "array": false,
+          "default": true
+        },
+        {
+          "key": "sortOrder",
+          "type": "integer",
+          "required": false,
+          "array": false,
+          "default": 0
+        },
+        {
+          "key": "subject",
+          "type": "string",
+          "required": true,
+          "array": false,
+          "size": 500,
+          "default": null
+        },
+        {
+          "key": "description",
+          "type": "string",
+          "required": false,
+          "array": false,
+          "size": 20000,
+          "default": null
+        },
+        {
+          "key": "type",
+          "type": "string",
+          "required": false,
+          "array": false,
+          "size": 64,
+          "default": null
+        },
+        {
+          "key": "status",
+          "type": "string",
+          "format": "enum",
+          "elements": [
+            "new",
+            "in_progress",
+            "blocked",
+            "done",
+            "cancelled"
+          ],
+          "required": false,
+          "array": false,
+          "default": "new"
+        },
+        {
+          "key": "priority",
+          "type": "string",
+          "format": "enum",
+          "elements": [
+            "low",
+            "normal",
+            "high",
+            "immediate"
+          ],
+          "required": false,
+          "array": false,
+          "default": "normal"
+        },
+        {
+          "key": "priorityRank",
+          "type": "integer",
+          "required": false,
+          "array": false,
+          "default": 2,
+          "min": 1,
+          "max": 4
+        },
+        {
+          "key": "estimatedHours",
+          "type": "double",
+          "required": false,
+          "array": false,
+          "default": null,
+          "min": 0
+        },
+        {
+          "key": "remainingHours",
+          "type": "double",
+          "required": false,
+          "array": false,
+          "default": null,
+          "min": 0
+        },
+        {
+          "key": "percentDone",
+          "type": "integer",
+          "required": false,
+          "array": false,
+          "default": 0,
+          "min": 0,
+          "max": 100
+        },
+        {
+          "key": "dueDate",
+          "type": "string",
+          "required": false,
+          "array": false,
+          "size": 10,
+          "default": null
+        },
+        {
+          "key": "startNotBefore",
+          "type": "string",
+          "required": false,
+          "array": false,
+          "size": 10,
+          "default": null
+        },
+        {
+          "key": "assigneeIds",
+          "type": "string",
+          "required": false,
+          "array": true,
+          "size": 36,
+          "default": null
+        },
+        {
+          "key": "ownerUserIds",
+          "type": "string",
+          "required": false,
+          "array": true,
+          "size": 36,
+          "default": null
+        },
+        {
+          "key": "dependsOn",
+          "type": "string",
+          "required": false,
+          "array": true,
+          "size": 36,
+          "default": null
+        },
+        {
+          "key": "externalSource",
+          "type": "string",
+          "required": false,
+          "array": false,
+          "size": 32,
+          "default": null
+        },
+        {
+          "key": "externalId",
+          "type": "string",
+          "required": false,
+          "array": false,
+          "size": 64,
+          "default": null
+        }
+      ],
+      "indexes": [
+        {
+          "key": "idx_project_status",
+          "type": "key",
+          "status": "available",
+          "attributes": [
+            "projectId",
+            "status"
+          ],
+          "orders": [
+            "ASC",
+            "ASC"
+          ]
+        },
+        {
+          "key": "idx_parent",
+          "type": "key",
+          "status": "available",
+          "attributes": [
+            "parentId"
+          ],
+          "orders": [
+            "ASC"
+          ]
+        },
+        {
+          "key": "idx_leaf_due",
+          "type": "key",
+          "status": "available",
+          "attributes": [
+            "isLeaf",
+            "dueDate",
+            "priorityRank"
+          ],
+          "orders": [
+            "ASC",
+            "ASC",
+            "DESC"
+          ]
+        },
+        {
+          "key": "uq_external",
+          "type": "unique",
+          "status": "available",
+          "attributes": [
+            "externalSource",
+            "externalId"
+          ],
+          "orders": [
+            "ASC",
+            "ASC"
+          ]
+        },
+        {
+          "key": "ft_subject",
+          "type": "fulltext",
+          "status": "available",
+          "attributes": [
+            "subject"
+          ],
+          "orders": [
+            "ASC"
+          ]
+        }
+      ]
+    },
+    {
+      "$id": "schedule_runs",
+      "$permissions": [],
+      "databaseId": "taskmanager",
+      "name": "Schedule runs",
+      "enabled": true,
+      "documentSecurity": false,
+      "attributes": [
+        {
+          "key": "createdBy",
+          "type": "string",
+          "required": true,
+          "array": false,
+          "size": 36,
+          "default": null
+        },
+        {
+          "key": "status",
+          "type": "string",
+          "format": "enum",
+          "elements": [
+            "running",
+            "succeeded",
+            "failed"
+          ],
+          "required": false,
+          "array": false,
+          "default": "running"
+        },
+        {
+          "key": "isCurrent",
+          "type": "boolean",
+          "required": false,
+          "array": false,
+          "default": false
+        },
+        {
+          "key": "scopeProjectIds",
+          "type": "string",
+          "required": false,
+          "array": true,
+          "size": 36,
+          "default": null
+        },
+        {
+          "key": "planningStart",
+          "type": "datetime",
+          "format": "",
+          "required": true,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "planningEnd",
+          "type": "datetime",
+          "format": "",
+          "required": false,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "finishedAt",
+          "type": "datetime",
+          "format": "",
+          "required": false,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "errors",
+          "type": "string",
+          "required": false,
+          "array": false,
+          "size": 100000,
+          "default": null
+        },
+        {
+          "key": "warnings",
+          "type": "string",
+          "required": false,
+          "array": false,
+          "size": 100000,
+          "default": null
+        }
+      ],
+      "indexes": [
+        {
+          "key": "idx_current",
+          "type": "key",
+          "status": "available",
+          "attributes": [
+            "isCurrent",
+            "$createdAt"
+          ],
+          "orders": [
+            "ASC",
+            "DESC"
+          ]
+        }
+      ]
+    },
+    {
+      "$id": "job_items",
+      "$permissions": [],
+      "databaseId": "taskmanager",
+      "name": "Job items",
+      "enabled": true,
+      "documentSecurity": false,
+      "attributes": [
+        {
+          "key": "runId",
+          "type": "string",
+          "required": true,
+          "array": false,
+          "size": 36,
+          "default": null
+        },
+        {
+          "key": "taskId",
+          "type": "string",
+          "required": true,
+          "array": false,
+          "size": 36,
+          "default": null
+        },
+        {
+          "key": "projectId",
+          "type": "string",
+          "required": true,
+          "array": false,
+          "size": 36,
+          "default": null
+        },
+        {
+          "key": "memberId",
+          "type": "string",
+          "required": true,
+          "array": false,
+          "size": 36,
+          "default": null
+        },
+        {
+          "key": "assignees",
+          "type": "string",
+          "required": false,
+          "array": true,
+          "size": 36,
+          "default": null
+        },
+        {
+          "key": "ownerUserIds",
+          "type": "string",
+          "required": false,
+          "array": true,
+          "size": 36,
+          "default": null
+        },
+        {
+          "key": "startDateTime",
+          "type": "datetime",
+          "format": "",
+          "required": true,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "finishDateTime",
+          "type": "datetime",
+          "format": "",
+          "required": true,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "hours",
+          "type": "double",
+          "required": true,
+          "array": false,
+          "default": null,
+          "min": 0
+        },
+        {
+          "key": "percentageDone",
+          "type": "integer",
+          "required": false,
+          "array": false,
+          "default": 0,
+          "min": 0,
+          "max": 100
+        },
+        {
+          "key": "effectiveDueDate",
+          "type": "string",
+          "required": false,
+          "array": false,
+          "size": 10,
+          "default": null
+        },
+        {
+          "key": "isLate",
+          "type": "boolean",
+          "required": false,
+          "array": false,
+          "default": false
+        }
+      ],
+      "indexes": [
+        {
+          "key": "idx_run_start",
+          "type": "key",
+          "status": "available",
+          "attributes": [
+            "runId",
+            "startDateTime"
+          ],
+          "orders": [
+            "ASC",
+            "ASC"
+          ]
+        },
+        {
+          "key": "idx_run_member_start",
+          "type": "key",
+          "status": "available",
+          "attributes": [
+            "runId",
+            "memberId",
+            "startDateTime"
+          ],
+          "orders": [
+            "ASC",
+            "ASC",
+            "ASC"
+          ]
+        },
+        {
+          "key": "idx_run_task",
+          "type": "key",
+          "status": "available",
+          "attributes": [
+            "runId",
+            "taskId"
+          ],
+          "orders": [
+            "ASC",
+            "ASC"
+          ]
+        }
+      ]
+    },
+    {
+      "$id": "time_entries",
+      "$permissions": [],
+      "databaseId": "taskmanager",
+      "name": "Time entries",
+      "enabled": true,
+      "documentSecurity": false,
+      "attributes": [
+        {
+          "key": "taskId",
+          "type": "string",
+          "required": true,
+          "array": false,
+          "size": 36,
+          "default": null
+        },
+        {
+          "key": "memberId",
+          "type": "string",
+          "required": true,
+          "array": false,
+          "size": 36,
+          "default": null
+        },
+        {
+          "key": "start",
+          "type": "datetime",
+          "format": "",
+          "required": true,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "end",
+          "type": "datetime",
+          "format": "",
+          "required": false,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "hours",
+          "type": "double",
+          "required": true,
+          "array": false,
+          "default": null,
+          "min": 0
+        },
+        {
+          "key": "jobItemId",
+          "type": "string",
+          "required": false,
+          "array": false,
+          "size": 36,
+          "default": null
+        },
+        {
+          "key": "note",
+          "type": "string",
+          "required": false,
+          "array": false,
+          "size": 1000,
+          "default": null
+        }
+      ],
+      "indexes": [
+        {
+          "key": "idx_task",
+          "type": "key",
+          "status": "available",
+          "attributes": [
+            "taskId"
+          ],
+          "orders": [
+            "ASC"
+          ]
+        },
+        {
+          "key": "idx_member_start",
+          "type": "key",
+          "status": "available",
+          "attributes": [
+            "memberId",
+            "start"
+          ],
+          "orders": [
+            "ASC",
+            "ASC"
+          ]
+        }
+      ]
+    }
+  ]
+}

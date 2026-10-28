@@ -11,13 +11,16 @@
     "build": "vite build",
     "preview": "vite preview",
     "format": "biome format",
-    "lint": "biome lint",
-    "check": "biome check"
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check .",
+    "knip": "knip",
+    "test": "vitest run --coverage",
+    "test:watch": "vitest",
+    "verify": "pnpm typecheck && pnpm lint && pnpm knip && pnpm test && pnpm build"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.18",
     "@tanstack/react-devtools": "0.10.13",
-    "@tanstack/react-form": "1.33.5",
     "@tanstack/react-query": "5.104.5",
     "@tanstack/react-query-devtools": "5.104.5",
     "@tanstack/react-router": "1.170.46",
@@ -27,21 +30,28 @@
     "nitro": "3.0.260610-beta",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "tailwindcss": "^4.1.18",
-    "zod": "^4.3.6"
+    "tailwindcss": "^4.1.18"
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.5",
     "@tailwindcss/typography": "^0.5.16",
-    "@tanstack/devtools-event-client": "0.5.0",
     "@tanstack/devtools-vite": "0.8.5",
     "@tanstack/router-cli": "^1.132.0",
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^14.6.8",
     "@types/node": "^22.10.2",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "^6.0.1",
+    "@vitest/coverage-v8": "^5.0.5",
+    "jsdom": "^30.1.3",
+    "knip": "^6.43.0",
+    "lefthook": "^2.2.2",
     "typescript": "^6.0.2",
-    "vite": "^8.0.0"
+    "vite": "^8.0.0",
+    "vitest": "^5.0.5",
+    "vitest-axe": "^0.1.0"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

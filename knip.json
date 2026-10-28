@@ -1,0 +1,12 @@
+{
+	"$schema": "https://unpkg.com/knip@6/schema.json",
+	"entry": ["src/router.tsx", "src/routes/**/*.tsx", "scripts/*.ts"],
+	"project": ["src/**/*.{ts,tsx}", "scripts/**/*.ts", "*.ts"],
+	"ignore": ["src/lib/appwrite/generated/**", "src/routeTree.gen.ts"],
+	"ignoreDependencies": [
+		"tailwindcss",
+		"@tailwindcss/typography",
+		"@testing-library/react",
+		"@testing-library/user-event"
+	]
+}

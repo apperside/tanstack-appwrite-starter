@@ -14,3 +14,4 @@ todos.json
 
 # Personal Claude Code settings
 .claude/settings.local.json
+coverage

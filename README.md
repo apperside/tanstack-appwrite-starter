@@ -180,7 +180,7 @@ All configuration lives in `.env.local`, validated at startup. A missing or inva
 |---|---|---|
 | `BACKEND` | server | The backend adapter: `appwrite` (default) or `memory` |
 | `VITE_REQUIRE_EMAIL_VERIFICATION` | public | `true` keeps unverified users on `/verify-email` until they verify. Default `false`: verification is offered but not enforced |
-| `APP_URL` | server | Public URL of the app, sub-path included. Recovery and verification links point here |
+| `APP_URL` | server | Public URL of the app, sub-path included. Recovery and verification links point here, and browsers without `Sec-Fetch-Site` may call server functions only from its origin (CSRF check) |
 | `TRUSTED_PROXY_HOPS` | server | Number of reverse proxies in front of the app that append to `X-Forwarded-For`. Default `0` uses the socket address |
 
 Each backend adapter validates its own variables, the first time it is used, so a backend you don't use needs none of them. For `BACKEND=appwrite`:

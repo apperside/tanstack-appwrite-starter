@@ -1,4 +1,4 @@
-import { useStore } from "@tanstack/react-form";
+import { useSelector } from "@tanstack/react-form";
 import { type ChangeEvent, type ReactNode, useId } from "react";
 import { useTranslation } from "react-i18next";
 import { Label } from "#/components/ui/label";
@@ -15,8 +15,8 @@ export function useFieldControl({ description }: { description?: string }) {
 	const field = useFieldContext<string>();
 	const { t } = useTranslation(["common", "errors"]);
 	const id = useId();
-	const meta = useStore(field.store, (state) => state.meta);
-	const submitted = useStore(
+	const meta = useSelector(field.store, (state) => state.meta);
+	const submitted = useSelector(
 		field.form.store,
 		(state) => state.submissionAttempts > 0,
 	);

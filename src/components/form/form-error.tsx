@@ -1,4 +1,4 @@
-import { useStore } from "@tanstack/react-form";
+import { useSelector } from "@tanstack/react-form";
 import { CircleAlertIcon } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Alert, AlertDescription } from "#/components/ui/alert";
@@ -12,7 +12,7 @@ import { useFormContext } from "./form-context";
  */
 export function FormError() {
 	const form = useFormContext();
-	const error = useStore(form.store, (state) => state.errorMap.onServer);
+	const error = useSelector(form.store, (state) => state.errorMap.onServer);
 	const { t } = useTranslation(["common", "errors"]);
 	if (!error) return null;
 	return (

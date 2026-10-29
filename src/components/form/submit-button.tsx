@@ -1,4 +1,4 @@
-import { useStore } from "@tanstack/react-form";
+import { useSelector } from "@tanstack/react-form";
 import { Loader2Icon } from "lucide-react";
 import type { ReactNode } from "react";
 import { Button } from "#/components/ui/button";
@@ -18,7 +18,7 @@ export function SubmitButton({
 	className?: string;
 }) {
 	const form = useFormContext();
-	const isSubmitting = useStore(form.store, (state) => state.isSubmitting);
+	const isSubmitting = useSelector(form.store, (state) => state.isSubmitting);
 	return (
 		<Button
 			type="submit"

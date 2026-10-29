@@ -10,7 +10,7 @@
 		"src/components/ui/*.tsx"
 	],
 	"project": ["src/**/*.{ts,tsx}", "scripts/**/*.ts", "*.ts"],
-	"ignore": ["src/lib/appwrite/generated/**", "src/routeTree.gen.ts"],
+	"ignore": ["src/adapters/appwrite/generated/**", "src/routeTree.gen.ts"],
 	"ignoreDependencies": [
 		// Referenced from styles.css only (knip does not follow CSS).
 		"@fontsource-variable/inter",

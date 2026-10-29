@@ -2,6 +2,7 @@ import { useSearch } from "@tanstack/react-router";
 import { screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { axe } from "vitest-axe";
+import type { EmailLinkParams } from "#/core/auth/types";
 import { resetPassword } from "#/features/auth/auth.functions";
 import { AppError } from "#/lib/errors";
 import { renderWithRouter } from "#/test/router";
@@ -21,8 +22,8 @@ vi.mock("#/components/ui/toast", () => ({
 const LINK = { userId: "65e12", secret: "s3cret" };
 const INVALID = "This link is invalid or has expired";
 
-function renderReset(props: Parameters<typeof ResetPasswordPage>[0] = LINK) {
-	return renderWithRouter(<ResetPasswordPage {...props} />, {
+function renderReset(link: EmailLinkParams = LINK) {
+	return renderWithRouter(<ResetPasswordPage link={link} />, {
 		path: "/reset-password",
 	});
 }
@@ -47,7 +48,7 @@ describe("ResetPasswordPage", () => {
 
 		await waitFor(() => expect(router.state.location.pathname).toBe("/login"));
 		expect(resetPassword).toHaveBeenCalledWith({
-			data: { ...LINK, password: "a much longer passphrase" },
+			data: { link: LINK, password: "a much longer passphrase" },
 		});
 		expect(toastSuccess).toHaveBeenCalledWith(
 			"Password updated. Sign in with your new password.",
@@ -56,11 +57,8 @@ describe("ResetPasswordPage", () => {
 
 	it("takes the link's secret out of the URL once read, and still uses it", async () => {
 		function FromUrl() {
-			const { userId, secret } = useSearch({ strict: false }) as {
-				userId?: string;
-				secret?: string;
-			};
-			return <ResetPasswordPage userId={userId} secret={secret} />;
+			const search = useSearch({ strict: false }) as EmailLinkParams;
+			return <ResetPasswordPage link={search} />;
 		}
 		const { user, router } = await renderWithRouter(<FromUrl />, {
 			path: "/reset-password",
@@ -74,13 +72,13 @@ describe("ResetPasswordPage", () => {
 		await submit(user);
 		await waitFor(() =>
 			expect(resetPassword).toHaveBeenCalledWith({
-				data: { ...LINK, password: "a much longer passphrase" },
+				data: { link: LINK, password: "a much longer passphrase" },
 			}),
 		);
 	});
 
 	it("after a reload (no link in the URL), reads the link back from history state", async () => {
-		const { user } = await renderWithRouter(<ResetPasswordPage />, {
+		const { user } = await renderWithRouter(<ResetPasswordPage link={{}} />, {
 			path: "/reset-password",
 			historyState: { emailLink: LINK },
 		});
@@ -90,15 +88,18 @@ describe("ResetPasswordPage", () => {
 		await submit(user);
 		await waitFor(() =>
 			expect(resetPassword).toHaveBeenCalledWith({
-				data: { ...LINK, password: "a much longer passphrase" },
+				data: { link: LINK, password: "a much longer passphrase" },
 			}),
 		);
 	});
 
-	it("ignores a malformed link in history state", async () => {
-		await renderWithRouter(<ResetPasswordPage />, {
+	it.each([
+		["empty values", { userId: "", secret: "" }],
+		["not an object", "junk"],
+	])("ignores a link in history state with %s", async (_, emailLink) => {
+		await renderWithRouter(<ResetPasswordPage link={{}} />, {
 			path: "/reset-password",
-			historyState: { emailLink: { userId: 42, secret: "" } },
+			historyState: { emailLink },
 		});
 		expect(screen.getByRole("heading", { name: INVALID })).toBeInTheDocument();
 	});
@@ -124,18 +125,26 @@ describe("ResetPasswordPage", () => {
 		);
 	});
 
-	it.each([
-		["no secret", { userId: "u1" }],
-		["no userId", { secret: "s1" }],
-		["nothing", {}],
-	])("with %s, shows the invalid-link state without calling the server (Review Focus 5)", async (_, props) => {
-		await renderReset(props);
+	it("without a link, shows the invalid-link state without calling the server (Review Focus 5)", async () => {
+		await renderReset({});
 		expect(screen.getByRole("heading", { name: INVALID })).toBeInTheDocument();
 		expect(
 			screen.getByRole("link", { name: "Request a new link" }),
 		).toHaveAttribute("href", "/forgot-password");
 		expect(screen.queryByLabelText("New password")).not.toBeInTheDocument();
 		expect(resetPassword).not.toHaveBeenCalled();
+	});
+
+	it("passes a link through as it is: the backend decides what is malformed", async () => {
+		vi.mocked(resetPassword).mockRejectedValue(new AppError("INVALID_TOKEN"));
+		const { user } = await renderReset({ userId: "u1" });
+		await submit(user);
+		expect(
+			await screen.findByRole("heading", { name: INVALID }),
+		).toBeInTheDocument();
+		expect(resetPassword).toHaveBeenCalledWith({
+			data: { link: { userId: "u1" }, password: "a much longer passphrase" },
+		});
 	});
 
 	it("switches to the invalid-link state when the server rejects the link", async () => {

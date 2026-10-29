@@ -2,6 +2,7 @@ import { useSearch } from "@tanstack/react-router";
 import { screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { axe } from "vitest-axe";
+import type { EmailLinkParams } from "#/core/auth/types";
 import {
 	confirmVerification,
 	getCurrentUser,
@@ -21,13 +22,13 @@ vi.mock("#/features/auth/auth.functions", () => ({
 }));
 
 const LINK = { userId: "u1", secret: "s1" };
-const unverified = () => aUser({ emailVerification: false });
+const unverified = () => aUser({ emailVerified: false });
 
 function renderVerify(
-	props: Parameters<typeof VerifyEmailPage>[0],
+	link: EmailLinkParams,
 	options: Parameters<typeof renderWithRouter>[1] = {},
 ) {
-	return renderWithRouter(<VerifyEmailPage {...props} />, {
+	return renderWithRouter(<VerifyEmailPage link={link} />, {
 		path: "/verify-email",
 		...options,
 	});
@@ -48,7 +49,7 @@ describe("VerifyEmailPage", () => {
 			await screen.findByRole("heading", { name: "Email verified" }),
 		).toBeInTheDocument();
 		expect(confirmVerification).toHaveBeenCalledTimes(1);
-		expect(confirmVerification).toHaveBeenCalledWith({ data: LINK });
+		expect(confirmVerification).toHaveBeenCalledWith({ data: { link: LINK } });
 	});
 
 	it("refreshes the user so the guards see the verified email", async () => {
@@ -56,7 +57,7 @@ describe("VerifyEmailPage", () => {
 		await screen.findByRole("heading", { name: "Email verified" });
 		await waitFor(() =>
 			expect(queryClient.getQueryData(["currentUser"])).toMatchObject({
-				emailVerification: true,
+				emailVerified: true,
 			}),
 		);
 		expect(screen.getByRole("link", { name: "Continue" })).toHaveAttribute(
@@ -106,7 +107,7 @@ describe("VerifyEmailPage", () => {
 		expect(sendVerification).toHaveBeenCalledTimes(1);
 	});
 
-	it("shows the verified state, not an invalid link, when the signed-in user's used link is opened again", async () => {
+	it("shows the verified state, not an invalid link, when a verified user opens a used link again", async () => {
 		vi.mocked(confirmVerification).mockRejectedValue(
 			new AppError("INVALID_TOKEN"),
 		);
@@ -120,13 +121,13 @@ describe("VerifyEmailPage", () => {
 		);
 	});
 
-	it("still calls another account's used link invalid", async () => {
+	it("still calls a used link invalid for an unverified user", async () => {
 		vi.mocked(confirmVerification).mockRejectedValue(
 			new AppError("INVALID_TOKEN"),
 		);
 		await renderVerify(
-			{ userId: "someone-else", secret: "used" },
-			{ user: aUser() },
+			{ userId: "user-1", secret: "used" },
+			{ user: unverified() },
 		);
 		expect(
 			await screen.findByRole("heading", {
@@ -137,24 +138,19 @@ describe("VerifyEmailPage", () => {
 
 	it("takes the link's secret out of the URL once read, and still confirms it", async () => {
 		function FromUrl() {
-			const { userId, secret } = useSearch({ strict: false }) as {
-				userId?: string;
-				secret?: string;
-			};
-			return <VerifyEmailPage userId={userId} secret={secret} />;
+			const search = useSearch({ strict: false }) as EmailLinkParams;
+			return <VerifyEmailPage link={search} />;
 		}
 		const { router } = await renderWithRouter(<FromUrl />, {
 			path: "/verify-email",
-			search: "?userId=u1&secret=s1&keep=1",
+			search: "?userId=u1&secret=s1",
 			user: unverified(),
 		});
 		expect(
 			await screen.findByRole("heading", { name: "Email verified" }),
 		).toBeInTheDocument();
-		expect(confirmVerification).toHaveBeenCalledWith({ data: LINK });
-		await waitFor(() =>
-			expect(router.state.location.search).toEqual({ keep: 1 }),
-		);
+		expect(confirmVerification).toHaveBeenCalledWith({ data: { link: LINK } });
+		await waitFor(() => expect(router.state.location.search).toEqual({}));
 		expect(router.history.location.search).not.toContain("s1");
 	});
 

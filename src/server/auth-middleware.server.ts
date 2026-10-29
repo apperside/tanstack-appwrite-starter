@@ -1,14 +1,12 @@
 import { getRequestHeader, getRequestIP } from "@tanstack/react-start/server";
 import { serverEnv } from "#/config/env";
+import type { SessionAuth } from "#/core/auth/ports";
+import type { User } from "#/core/auth/types";
+import type { Backend } from "#/core/backend";
 import { resolveLocale } from "#/i18n/locale";
-import type { AppClient, AppUser } from "#/lib/appwrite/app-models";
-import {
-	createAdminClient,
-	createAnonymousClient,
-	createUserClient,
-} from "#/lib/appwrite/server-client.server";
 import { AppError, toAppError } from "#/lib/errors";
 import { appLink } from "./app-link";
+import { getBackend } from "./backend.server";
 import { resolveClientIp } from "./client-ip.server";
 import type {
 	PreferenceCookies,
@@ -24,43 +22,37 @@ import { rateLimit } from "./rate-limit.server";
 import { requestSessionCookie } from "./session-cookie.server";
 
 type ServerContextDeps = {
+	backend: Backend;
 	sessionCookie: SessionCookie;
 	preferenceCookies: PreferenceCookies;
 	browserPrefs: ServerContext["browserPrefs"];
 	clientIp: string;
 	userAgent: string | undefined;
 	appUrl: string;
-	createUserClient(sessionSecret: string): AppClient<"server">;
-	createAdminClient(options: {
-		forwardedUserAgent?: string;
-	}): AppClient<"admin">;
-	createAnonymousClient(): AppClient<"server">;
 	rateLimit: ServerContext["rateLimit"];
 };
 
-/** Builds the per-request context. Nothing touches Appwrite until a handler asks. */
+/** Builds the per-request context. Nothing touches the backend until a handler asks. */
 export function buildServerContext(deps: ServerContextDeps): ServerContext {
 	const { sessionCookie } = deps;
+	const auth = deps.backend.auth({ userAgent: deps.userAgent });
 	let sessionGone = false;
-	let userClient: AppClient<"server"> | undefined;
-	let adminClient: AppClient<"admin"> | undefined;
-	let user: Promise<AppUser | null> | undefined;
+	let user: Promise<User | null> | undefined;
 
 	function secret(): string | undefined {
 		return sessionGone ? undefined : sessionCookie.read();
 	}
 
-	function appwriteUser(): AppClient<"server"> {
-		const sessionSecret = secret();
-		if (!sessionSecret) throw new AppError("UNAUTHENTICATED");
-		userClient ??= deps.createUserClient(sessionSecret);
-		return userClient;
+	function session(): SessionAuth {
+		const token = secret();
+		if (!token) throw new AppError("UNAUTHENTICATED");
+		return auth.session(token);
 	}
 
-	async function loadUser(): Promise<AppUser | null> {
+	async function loadUser(): Promise<User | null> {
 		if (!secret()) return null;
 		try {
-			return await appwriteUser().account.get();
+			return await session().getUser();
 		} catch (error) {
 			const appError = toAppError(error);
 			if (appError.code !== "UNAUTHENTICATED") throw appError;
@@ -72,17 +64,9 @@ export function buildServerContext(deps: ServerContextDeps): ServerContext {
 	}
 
 	return {
-		appwrite: {
-			user: appwriteUser,
-			forSession: (sessionSecret) => deps.createUserClient(sessionSecret),
-			admin: () => {
-				adminClient ??= deps.createAdminClient({
-					forwardedUserAgent: deps.userAgent,
-				});
-				return adminClient;
-			},
-			anonymous: () => deps.createAnonymousClient(),
-		},
+		auth,
+		session,
+		data: deps.backend.data,
 		getUser: () => {
 			user ??= loadUser();
 			return user;
@@ -98,8 +82,9 @@ export function buildServerContext(deps: ServerContextDeps): ServerContext {
 }
 
 /** The context for the current request; only valid inside a request handler. */
-export function buildRequestContext(): ServerContext {
+export async function buildRequestContext(): Promise<ServerContext> {
 	return buildServerContext({
+		backend: await getBackend(),
 		sessionCookie: requestSessionCookie(),
 		preferenceCookies: requestPreferenceCookies(),
 		browserPrefs: {
@@ -114,9 +99,6 @@ export function buildRequestContext(): ServerContext {
 		}),
 		userAgent: getRequestHeader("user-agent"),
 		appUrl: serverEnv().APP_URL,
-		createUserClient,
-		createAdminClient,
-		createAnonymousClient,
 		rateLimit,
 	});
 }

@@ -21,11 +21,11 @@ import {
 	AlertDialogTrigger,
 } from "#/components/ui/alert-dialog";
 import { Button, buttonVariants } from "#/components/ui/button";
+import type { DeviceSession } from "#/core/auth/types";
 import { useSignOut } from "#/features/auth/use-sign-out";
 import { useHydrated } from "#/hooks/use-hydrated";
 import { cn } from "#/lib/cn";
 import { sessionsQuery } from "../account.queries";
-import type { SessionInfo } from "../account.types";
 import {
 	SettingsCard,
 	SettingsCardBody,
@@ -78,7 +78,7 @@ export function SessionsCard({
 }
 
 /** A card on phones, a row from `sm`: what signed in, from where, and when. */
-function SessionItem({ session }: { session: SessionInfo }) {
+function SessionItem({ session }: { session: DeviceSession }) {
 	const { t, i18n } = useTranslation("account");
 	const device = DEVICES[session.deviceName];
 	const Icon = device?.icon ?? MonitorSmartphoneIcon;

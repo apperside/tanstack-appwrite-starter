@@ -1,94 +1,41 @@
-import type { Models } from "node-appwrite";
-import { type AppUser, DEFAULT_PREFS } from "#/lib/appwrite/app-models";
+import type { AuthSession, User } from "#/core/auth/types";
+import { DEFAULT_PREFS } from "#/core/prefs";
 
 /** Fixed "now" for every fixture, so tests never depend on the clock. */
 const REFERENCE_DATE = "2026-01-01T00:00:00.000+00:00";
 const ONE_YEAR_LATER = "2027-01-01T00:00:00.000+00:00";
 
-export function aUser(overrides: Partial<AppUser> = {}): AppUser {
+export function aUser(overrides: Partial<User> = {}): User {
 	return {
-		$id: "user-1",
-		$createdAt: REFERENCE_DATE,
-		$updatedAt: REFERENCE_DATE,
-		name: "Test User",
-		registration: REFERENCE_DATE,
-		status: true,
-		labels: [],
-		passwordUpdate: REFERENCE_DATE,
+		id: "user-1",
 		email: "user@example.test",
-		phone: "",
-		emailVerification: true,
-		phoneVerification: false,
-		mfa: false,
+		name: "Test User",
+		emailVerified: true,
+		isGuest: false,
 		prefs: { ...DEFAULT_PREFS },
-		targets: [],
-		accessedAt: REFERENCE_DATE,
+		createdAt: REFERENCE_DATE,
 		...overrides,
 	};
 }
 
 /** An anonymous (guest) account: no email, name or password. */
-export function aGuest(overrides: Partial<AppUser> = {}): AppUser {
+export function aGuest(overrides: Partial<User> = {}): User {
 	return aUser({
-		$id: "guest-1",
+		id: "guest-1",
 		name: "",
 		email: "",
-		emailVerification: false,
-		passwordUpdate: "",
+		emailVerified: false,
+		isGuest: true,
 		...overrides,
 	});
 }
 
-export function aSession(
-	overrides: Partial<Models.Session> = {},
-): Models.Session {
+export function aSession(overrides: Partial<AuthSession> = {}): AuthSession {
 	return {
-		$id: "session-1",
-		$createdAt: REFERENCE_DATE,
-		$updatedAt: REFERENCE_DATE,
+		id: "session-1",
 		userId: "user-1",
-		expire: ONE_YEAR_LATER,
-		provider: "email",
-		providerUid: "user@example.test",
-		providerAccessToken: "",
-		providerAccessTokenExpiry: "",
-		providerRefreshToken: "",
-		ip: "127.0.0.1",
-		osCode: "",
-		osName: "",
-		osVersion: "",
-		clientType: "",
-		clientCode: "",
-		clientName: "",
-		clientVersion: "",
-		clientEngine: "",
-		clientEngineVersion: "",
-		deviceName: "",
-		deviceBrand: "",
-		deviceModel: "",
-		countryCode: "",
-		countryName: "",
-		current: true,
-		factors: ["password"],
-		secret: "session-secret",
-		mfaUpdatedAt: "",
+		token: "session-secret",
+		expiresAt: ONE_YEAR_LATER,
 		...overrides,
 	};
-}
-
-export function aJwt(overrides: Partial<Models.Jwt> = {}): Models.Jwt {
-	return { jwt: "jwt-token", ...overrides };
-}
-
-/** A session of an anonymous (guest) account. */
-export function aGuestSession(
-	overrides: Partial<Models.Session> = {},
-): Models.Session {
-	return aSession({
-		userId: "guest-1",
-		provider: "anonymous",
-		providerUid: "",
-		factors: [],
-		...overrides,
-	});
 }

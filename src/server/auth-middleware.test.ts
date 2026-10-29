@@ -1,9 +1,9 @@
 import { notFound, redirect } from "@tanstack/react-router";
 import { getRequestHeader, getRequestIP } from "@tanstack/react-start/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { AppClient } from "#/lib/appwrite/app-models";
+import type { AuthService, SessionAuth } from "#/core/auth/ports";
+import type { Backend } from "#/core/backend";
 import { AppError } from "#/lib/errors";
-import { appwriteError } from "#/test/appwrite-error";
 import { aSession, aUser } from "#/test/fixtures";
 import { authMiddleware } from "./auth-middleware";
 import { buildServerContext } from "./auth-middleware.server";
@@ -25,32 +25,36 @@ vi.mock("./preference-cookies.server", () => ({
 	readLocaleHints: () => ({ acceptLanguage: "it-IT,it;q=0.9" }),
 	readThemeCookie: () => "dark",
 }));
-vi.mock("#/lib/appwrite/server-client.server", () => ({
-	createUserClient: vi.fn(),
-	createAdminClient: vi.fn(),
-	createAnonymousClient: vi.fn(),
+const backendAuth = vi.hoisted(() => vi.fn());
+vi.mock("./backend.server", () => ({
+	getBackend: async () => ({ auth: backendAuth, data: {} }),
 }));
 
 const USER_AGENT = "Mozilla/5.0 (Macintosh) Firefox/140.0";
 
-function setup(secret: string | null = aSession().secret) {
+function setup(secret: string | null = aSession().token) {
 	let value: string | undefined = secret ?? undefined;
 	const sessionCookie: SessionCookie = {
 		read: () => value,
 		write: (session) => {
-			value = session.secret;
+			value = session.token;
 		},
 		clear: vi.fn(() => {
 			value = undefined;
 		}),
 	};
-	const get = vi.fn();
-	const userClient = { account: { get } } as unknown as AppClient<"server">;
-	const createUserClient = vi.fn(() => userClient);
-	const createAdminClient = vi.fn(() => ({}) as AppClient<"admin">);
-	const createAnonymousClient = vi.fn(() => ({}) as AppClient<"server">);
+	const get = vi.fn<SessionAuth["getUser"]>();
+	const session = vi.fn(
+		(_token: string) => ({ getUser: get }) as unknown as SessionAuth,
+	);
+	const auth = { session } as unknown as AuthService;
+	const backend: Backend = {
+		auth: vi.fn(() => auth),
+		data: {} as Backend["data"],
+	};
 	const rateLimit = vi.fn();
 	const deps: Parameters<typeof buildServerContext>[0] = {
+		backend,
 		sessionCookie,
 		preferenceCookies: {
 			writeLocale: vi.fn(),
@@ -61,30 +65,28 @@ function setup(secret: string | null = aSession().secret) {
 		clientIp: "203.0.113.9",
 		userAgent: USER_AGENT,
 		appUrl: "https://app.test",
-		createUserClient,
-		createAdminClient,
-		createAnonymousClient,
 		rateLimit,
 	};
 	const context = buildServerContext(deps);
 	return {
 		context,
 		deps,
+		backend,
+		auth,
+		session,
 		get,
 		sessionCookie,
-		createUserClient,
-		createAdminClient,
-		createAnonymousClient,
 		rateLimit,
 	};
 }
 
 describe("buildServerContext", () => {
-	it("builds an anonymous client without reading the session", () => {
-		const { context, createAnonymousClient, createUserClient } = setup();
-		const client = context.appwrite.anonymous();
-		expect(client).toBe(createAnonymousClient.mock.results[0]?.value);
-		expect(createUserClient).not.toHaveBeenCalled();
+	it("gives the backend the request's user agent (sessions it creates name the browser)", () => {
+		const { context, backend, auth } = setup();
+		expect(backend.auth).toHaveBeenCalledWith({ userAgent: USER_AGENT });
+		expect(context.auth).toBe(auth);
+		expect(context.data).toBe(backend.data);
+		expect(context.userAgent).toBe(USER_AGENT);
 	});
 
 	it("exposes the request's ip, cookie and rate limiter", () => {
@@ -116,30 +118,27 @@ describe("buildServerContext", () => {
 		);
 	});
 
-	it("resolves null without calling Appwrite when there is no cookie", async () => {
-		const { context, get, createUserClient } = setup(null);
+	it("resolves null without calling the backend when there is no cookie", async () => {
+		const { context, get, session } = setup(null);
 		await expect(context.getUser()).resolves.toBeNull();
-		expect(createUserClient).not.toHaveBeenCalled();
+		expect(session).not.toHaveBeenCalled();
 		expect(get).not.toHaveBeenCalled();
 	});
 
 	it("loads the user once even when awaited twice", async () => {
-		const { context, get, createUserClient } = setup();
+		const { context, get, session } = setup();
 		get.mockResolvedValue(aUser());
 		const [a, b] = await Promise.all([context.getUser(), context.getUser()]);
 		await context.getUser();
 		expect(a).toEqual(aUser());
 		expect(b).toBe(a);
 		expect(get).toHaveBeenCalledTimes(1);
-		expect(createUserClient).toHaveBeenCalledWith(aSession().secret);
+		expect(session).toHaveBeenCalledWith(aSession().token);
 	});
 
-	it.each([
-		"user_session_not_found",
-		"user_unauthorized",
-	])("resolves null and clears the cookie on %s", async (type) => {
+	it("resolves null and clears the cookie when the session ended", async () => {
 		const { context, get, sessionCookie } = setup();
-		get.mockRejectedValue(appwriteError(type, 401));
+		get.mockRejectedValue(new AppError("UNAUTHENTICATED"));
 		await expect(context.getUser()).resolves.toBeNull();
 		expect(sessionCookie.clear).toHaveBeenCalledTimes(1);
 		expect(sessionCookie.read()).toBeUndefined();
@@ -147,57 +146,35 @@ describe("buildServerContext", () => {
 
 	it("treats the session as gone for the rest of the request", async () => {
 		const { context, get, sessionCookie } = setup();
-		get.mockRejectedValue(appwriteError("user_session_not_found", 401));
+		get.mockRejectedValue(new AppError("UNAUTHENTICATED"));
 		await context.getUser();
-		expect(() => context.appwrite.user()).toThrow("UNAUTHENTICATED");
+		expect(() => context.session()).toThrow("UNAUTHENTICATED");
 		// Even if the cookie store still returns the stale value.
 		vi.spyOn(sessionCookie, "read").mockReturnValue("stale");
-		expect(() => context.appwrite.user()).toThrow("UNAUTHENTICATED");
+		expect(() => context.session()).toThrow("UNAUTHENTICATED");
 		await expect(context.getUser()).resolves.toBeNull();
 		expect(get).toHaveBeenCalledTimes(1);
 	});
 
 	it("rejects with an AppError on other failures and keeps the cookie", async () => {
 		const { context, get, sessionCookie } = setup();
-		get.mockRejectedValue(appwriteError("general_server_error", 500));
+		get.mockRejectedValue(new Error("down"));
 		const failure = await context.getUser().catch((e: unknown) => e);
 		expect(failure).toBeInstanceOf(AppError);
 		expect((failure as AppError).code).toBe("UNKNOWN");
 		expect(sessionCookie.clear).not.toHaveBeenCalled();
 	});
 
-	it("appwrite.user() throws UNAUTHENTICATED without a cookie", () => {
+	it("session() throws UNAUTHENTICATED without a cookie", () => {
 		const { context } = setup(null);
-		expect(() => context.appwrite.user()).toThrow(AppError);
-		expect(() => context.appwrite.user()).toThrow("UNAUTHENTICATED");
+		expect(() => context.session()).toThrow(AppError);
+		expect(() => context.session()).toThrow("UNAUTHENTICATED");
 	});
 
-	it("appwrite.user() reuses one client per request", () => {
-		const { context, createUserClient } = setup();
-		expect(context.appwrite.user()).toBe(context.appwrite.user());
-		expect(createUserClient).toHaveBeenCalledTimes(1);
-	});
-
-	it("forSession builds a client for the given secret, even without a cookie", () => {
-		const { context, createUserClient } = setup(null);
-		expect(context.appwrite.forSession("new-secret")).toBeDefined();
-		expect(createUserClient).toHaveBeenCalledWith("new-secret");
-	});
-
-	it("builds the admin client lazily, once", () => {
-		const { context, createAdminClient } = setup();
-		expect(createAdminClient).not.toHaveBeenCalled();
-		expect(context.appwrite.admin()).toBe(context.appwrite.admin());
-		expect(createAdminClient).toHaveBeenCalledTimes(1);
-	});
-
-	it("gives the admin client (which creates sessions) the request's user agent", () => {
-		const { context, createAdminClient } = setup();
-		context.appwrite.admin();
-		expect(createAdminClient).toHaveBeenCalledWith({
-			forwardedUserAgent: USER_AGENT,
-		});
-		expect(context.userAgent).toBe(USER_AGENT);
+	it("session() acts as the cookie's session", () => {
+		const { context, session } = setup();
+		context.session();
+		expect(session).toHaveBeenCalledWith(aSession().token);
 	});
 });
 
@@ -210,6 +187,12 @@ describe("authMiddleware", () => {
 		await (authMiddleware.options.server as any)({ next });
 		return next.mock.calls[0][0].context;
 	}
+
+	it("builds the context on the backend in use", async () => {
+		backendAuth.mockReturnValue({});
+		await contextFor({});
+		expect(backendAuth).toHaveBeenCalled();
+	});
 
 	it("uses the socket address and ignores a spoofed X-Forwarded-For", async () => {
 		hops = 0;
@@ -260,11 +243,9 @@ describe("authMiddleware error normalization", () => {
 
 	afterEach(() => vi.restoreAllMocks());
 
-	it("maps a raw Appwrite error to its stable code, without logging it", async () => {
+	it("maps a serialized code to its AppError, without logging it", async () => {
 		const log = vi.spyOn(console, "error").mockImplementation(() => {});
-		const thrown = await failWith(
-			appwriteError("user_invalid_credentials", 401),
-		);
+		const thrown = await failWith(new Error("INVALID_CREDENTIALS"));
 		expect(thrown).toEqual(new AppError("INVALID_CREDENTIALS"));
 		expect(log).not.toHaveBeenCalled();
 	});
@@ -276,13 +257,20 @@ describe("authMiddleware error normalization", () => {
 
 	it("logs the original of an unmapped error with the function's name, and sends UNKNOWN", async () => {
 		const log = vi.spyOn(console, "error").mockImplementation(() => {});
-		const original = appwriteError("general_server_error", 500);
+		const original = new Error("boom");
 		const thrown = await failWith(original);
 		expect(thrown).toEqual(new AppError("UNKNOWN"));
 		expect(log).toHaveBeenCalledWith(
 			expect.stringContaining("listSessions"),
 			original,
 		);
+	});
+
+	it("logs an adapter's vendor error, kept as the cause of its UNKNOWN", async () => {
+		const log = vi.spyOn(console, "error").mockImplementation(() => {});
+		const vendor = new Error("vendor 500");
+		await failWith(new AppError("UNKNOWN", { cause: vendor }));
+		expect(log).toHaveBeenCalledWith(expect.any(String), vendor);
 	});
 
 	it("lets router redirects and not-founds through", async () => {

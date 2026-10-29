@@ -1,8 +1,8 @@
 import { isRedirect } from "@tanstack/react-router";
-import type { AppUser } from "#/lib/appwrite/app-models";
+import type { User } from "#/core/auth/types";
 
 type BeforeLoadArgs = {
-	context: { user: AppUser | null };
+	context: { user: User | null };
 	search?: Record<string, unknown>;
 	location?: { href: string; search: Record<string, unknown> };
 	cause?: "enter" | "stay" | "preload";

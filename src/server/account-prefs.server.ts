@@ -1,5 +1,5 @@
+import { type AppPrefs, DEFAULT_PREFS } from "#/core/prefs";
 import { isLocale } from "#/i18n/locale";
-import { type AppPrefs, DEFAULT_PREFS } from "#/lib/appwrite/app-models";
 import { isThemePreference } from "#/lib/theme";
 import type { ServerContext } from "./context";
 
@@ -32,19 +32,16 @@ export function writePreferenceCookies(
 }
 
 /**
- * Merges `patch` into the signed-in user's stored prefs, read fresh (Appwrite
- * replaces the whole object and the context's user may be stale), and mirrors
- * a changed locale or theme into the cookies. Never stamps the defaults over
- * what was not saved: readers fall back to them.
+ * Merges `patch` into the signed-in user's stored prefs (the backend merges:
+ * the context's user may be stale) and mirrors a changed locale or theme into
+ * the cookies. Never stamps the defaults over what was not saved: readers
+ * fall back to them.
  */
 export async function savePrefs(
-	context: Pick<ServerContext, "appwrite" | "preferenceCookies">,
+	context: Pick<ServerContext, "session" | "preferenceCookies">,
 	patch: Partial<AppPrefs>,
 ): Promise<Partial<AppPrefs>> {
-	const { account } = context.appwrite.user();
-	const stored = await account.getPrefs<Partial<AppPrefs>>();
-	const merged = { ...stored, ...patch };
-	await account.updatePrefs({ prefs: merged });
+	const merged = await context.session().updatePrefs(patch);
 	writePreferenceCookies(context, patch);
 	return merged;
 }

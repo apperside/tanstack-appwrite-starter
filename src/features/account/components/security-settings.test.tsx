@@ -1,11 +1,11 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { axe } from "vitest-axe";
+import type { DeviceSession } from "#/core/auth/types";
 import {
 	changePassword,
 	listSessions,
 } from "#/features/account/account.functions";
-import type { SessionInfo } from "#/features/account/account.types";
 import {
 	getCurrentUser,
 	signOutEverywhere,
@@ -28,7 +28,7 @@ vi.mock("#/components/ui/toast", () => ({
 	toast: { success: toastSuccess, error: vi.fn() },
 }));
 
-function aSessionInfo(overrides: Partial<SessionInfo> = {}): SessionInfo {
+function aSessionInfo(overrides: Partial<DeviceSession> = {}): DeviceSession {
 	return {
 		id: "s-1",
 		current: false,

@@ -1,9 +1,9 @@
 import { act, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { axe } from "vitest-axe";
+import { DEFAULT_PREFS } from "#/core/prefs";
 import { updatePreferences } from "#/features/account/account.functions";
 import { getCurrentUser, signOut } from "#/features/auth/auth.functions";
-import { DEFAULT_PREFS } from "#/lib/appwrite/app-models";
 import { AppError } from "#/lib/errors";
 import type { SidebarMode } from "#/lib/sidebar-state";
 import { aGuest, aUser } from "#/test/fixtures";

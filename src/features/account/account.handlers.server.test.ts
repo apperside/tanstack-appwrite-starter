@@ -1,8 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
-import { DEFAULT_PREFS } from "#/lib/appwrite/app-models";
+import type { DeviceSession } from "#/core/auth/types";
+import { DEFAULT_PREFS } from "#/core/prefs";
 import { AppError } from "#/lib/errors";
-import { appwriteError } from "#/test/appwrite-error";
-import { aGuest, aSession, aUser } from "#/test/fixtures";
 import { createTestContext } from "#/test/test-context";
 import { throughMiddleware } from "#/test/through-middleware";
 import {
@@ -13,86 +12,92 @@ import {
 	updatePreferencesHandler,
 } from "./account.handlers.server";
 
+const password = "password1";
+
+function aDeviceSession(overrides: Partial<DeviceSession>): DeviceSession {
+	return {
+		id: "s",
+		current: false,
+		clientName: "",
+		osName: "",
+		deviceName: "",
+		createdAt: "2026-01-01",
+		...overrides,
+	};
+}
+
 describe("listSessionsHandler", () => {
-	it("maps session fields and puts the current session first, then newest", async () => {
-		const { context, userAccount } = createTestContext({ user: aUser() });
-		userAccount.listSessions.mockResolvedValue({
-			total: 3,
-			sessions: [
-				aSession({ $id: "old", current: false, $createdAt: "2026-01-01" }),
-				aSession({
-					$id: "cur",
-					current: true,
-					$createdAt: "2025-06-01",
-					clientName: "Firefox",
-					osName: "macOS",
-					deviceName: "desktop",
-					countryName: "Italy",
-				}),
-				aSession({ $id: "new", current: false, $createdAt: "2026-03-01" }),
-			],
-		});
-
-		const result = await listSessionsHandler({ context });
-
+	it("puts the current session first, then newest", async () => {
+		const test = createTestContext();
+		await test.seedUser();
+		test.session.listSessions.mockResolvedValueOnce([
+			aDeviceSession({ id: "old", createdAt: "2026-01-01" }),
+			aDeviceSession({ id: "cur", current: true, createdAt: "2025-06-01" }),
+			aDeviceSession({ id: "new", createdAt: "2026-03-01" }),
+		]);
+		const result = await listSessionsHandler({ context: test.context });
 		expect(result.map((s) => s.id)).toEqual(["cur", "new", "old"]);
-		expect(result[0]).toEqual({
-			id: "cur",
-			current: true,
-			clientName: "Firefox",
-			osName: "macOS",
-			deviceName: "desktop",
-			createdAt: "2025-06-01",
-		});
 	});
 
-	it("rejects UNAUTHENTICATED without calling Appwrite when signed out", async () => {
-		const { context, userAccount } = createTestContext({
-			user: null,
-			sessionSecret: "stale",
-		});
+	it("lists the account's sessions from the backend", async () => {
+		const test = createTestContext();
+		const { session } = await test.seedUser();
 		await expect(
-			throughMiddleware(listSessionsHandler({ context })),
+			listSessionsHandler({ context: test.context }),
+		).resolves.toEqual([
+			expect.objectContaining({ id: session.id, current: true }),
+		]);
+	});
+
+	it("rejects UNAUTHENTICATED without calling the backend when signed out", async () => {
+		const test = createTestContext();
+		test.sessionCookie.value = "stale";
+		await expect(
+			throughMiddleware(listSessionsHandler({ context: test.context })),
 		).rejects.toEqual(new AppError("UNAUTHENTICATED"));
-		expect(userAccount.listSessions).not.toHaveBeenCalled();
+		expect(test.session.listSessions).not.toHaveBeenCalled();
 	});
 });
 
 describe("changePasswordHandler", () => {
-	const data = { currentPassword: "old-pass", newPassword: "new-password" };
+	const data = { currentPassword: password, newPassword: "new-password" };
 
-	it("updates the password with the old one", async () => {
-		const { context, userAccount } = createTestContext({ user: aUser() });
-		userAccount.updatePassword.mockResolvedValue({} as never);
-		await expect(changePasswordHandler({ data, context })).resolves.toEqual({
-			ok: true,
-		});
-		expect(userAccount.updatePassword).toHaveBeenCalledWith({
+	it("updates the password with the current one", async () => {
+		const test = createTestContext();
+		const { session } = await test.seedUser({ password });
+		await expect(
+			changePasswordHandler({ data, context: test.context }),
+		).resolves.toEqual({ ok: true });
+		expect(test.session.updatePassword).toHaveBeenCalledWith(session.token, {
 			password: "new-password",
-			oldPassword: "old-pass",
+			oldPassword: password,
 		});
 	});
 
-	it("maps a wrong current password to INVALID_CREDENTIALS", async () => {
-		const { context, userAccount } = createTestContext({ user: aUser() });
-		userAccount.updatePassword.mockRejectedValue(
-			appwriteError("user_invalid_credentials", 401),
-		);
+	it("rejects a wrong current password as INVALID_CREDENTIALS", async () => {
+		const test = createTestContext();
+		await test.seedUser({ password });
 		await expect(
-			throughMiddleware(changePasswordHandler({ data, context })),
+			throughMiddleware(
+				changePasswordHandler({
+					data: { ...data, currentPassword: "wrong-password" },
+					context: test.context,
+				}),
+			),
 		).rejects.toEqual(new AppError("INVALID_CREDENTIALS"));
 	});
 
 	it("is FORBIDDEN for a guest", async () => {
-		const { context, userAccount } = createTestContext({ user: aGuest() });
+		const test = createTestContext();
+		await test.seedGuest();
 		await expect(
-			throughMiddleware(changePasswordHandler({ data, context })),
+			throughMiddleware(changePasswordHandler({ data, context: test.context })),
 		).rejects.toEqual(new AppError("FORBIDDEN"));
-		expect(userAccount.updatePassword).not.toHaveBeenCalled();
+		expect(test.session.updatePassword).not.toHaveBeenCalled();
 	});
 
 	it("is UNAUTHENTICATED when signed out", async () => {
-		const { context } = createTestContext({ user: null });
+		const { context } = createTestContext();
 		await expect(
 			throughMiddleware(changePasswordHandler({ data, context })),
 		).rejects.toEqual(new AppError("UNAUTHENTICATED"));
@@ -100,54 +105,60 @@ describe("changePasswordHandler", () => {
 });
 
 describe("changeEmailHandler", () => {
-	const data = { email: "new@b.test", password: "pw-12345" };
+	const data = { email: "new@b.test", password };
 
 	it("updates the email, then sends a verification email", async () => {
-		const { context, userAccount } = createTestContext({ user: aUser() });
-		userAccount.updateEmail.mockResolvedValue({} as never);
-		userAccount.createVerification.mockResolvedValue({} as never);
-		await expect(changeEmailHandler({ data, context })).resolves.toEqual({
-			ok: true,
+		const test = createTestContext();
+		await test.seedUser({ password });
+		await expect(
+			changeEmailHandler({ data, context: test.context }),
+		).resolves.toEqual({ ok: true });
+		await expect(test.context.session().getUser()).resolves.toMatchObject({
+			email: "new@b.test",
+			emailVerified: false,
 		});
-		expect(userAccount.updateEmail).toHaveBeenCalledWith(data);
-		expect(userAccount.createVerification).toHaveBeenCalledWith({
-			url: "http://app.test/verify-email",
-		});
+		expect(test.emails).toEqual([
+			expect.objectContaining({
+				to: "new@b.test",
+				purpose: "verification",
+				url: expect.stringMatching(/^http:\/\/app\.test\/verify-email\?/),
+			}),
+		]);
 	});
 
 	it("still succeeds when the verification email fails", async () => {
 		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-		const { context, userAccount } = createTestContext({ user: aUser() });
-		userAccount.updateEmail.mockResolvedValue({} as never);
-		userAccount.createVerification.mockRejectedValue(new Error("smtp"));
-		await expect(changeEmailHandler({ data, context })).resolves.toEqual({
-			ok: true,
-		});
+		const test = createTestContext();
+		await test.seedUser({ password });
+		test.session.sendVerification.mockRejectedValueOnce(new Error("smtp"));
+		await expect(
+			changeEmailHandler({ data, context: test.context }),
+		).resolves.toEqual({ ok: true });
 		expect(warn).toHaveBeenCalled();
 		warn.mockRestore();
 	});
 
-	it("maps a taken email and does not send verification", async () => {
-		const { context, userAccount } = createTestContext({ user: aUser() });
-		userAccount.updateEmail.mockRejectedValue(
-			appwriteError("user_email_already_exists", 409),
-		);
+	it("rejects a taken email and does not send verification", async () => {
+		const test = createTestContext();
+		await test.seedUser({ email: data.email, signIn: false });
+		await test.seedUser({ password });
 		await expect(
-			throughMiddleware(changeEmailHandler({ data, context })),
+			throughMiddleware(changeEmailHandler({ data, context: test.context })),
 		).rejects.toEqual(new AppError("EMAIL_TAKEN"));
-		expect(userAccount.createVerification).not.toHaveBeenCalled();
+		expect(test.session.sendVerification).not.toHaveBeenCalled();
 	});
 
 	it("is FORBIDDEN for a guest", async () => {
-		const { context, userAccount } = createTestContext({ user: aGuest() });
+		const test = createTestContext();
+		await test.seedGuest();
 		await expect(
-			throughMiddleware(changeEmailHandler({ data, context })),
+			throughMiddleware(changeEmailHandler({ data, context: test.context })),
 		).rejects.toEqual(new AppError("FORBIDDEN"));
-		expect(userAccount.updateEmail).not.toHaveBeenCalled();
+		expect(test.session.updateEmail).not.toHaveBeenCalled();
 	});
 
 	it("is UNAUTHENTICATED when signed out", async () => {
-		const { context } = createTestContext({ user: null });
+		const { context } = createTestContext();
 		await expect(
 			throughMiddleware(changeEmailHandler({ data, context })),
 		).rejects.toEqual(new AppError("UNAUTHENTICATED"));
@@ -156,124 +167,131 @@ describe("changeEmailHandler", () => {
 
 describe("changeNameHandler", () => {
 	it("updates the name", async () => {
-		const { context, userAccount } = createTestContext({ user: aUser() });
-		userAccount.updateName.mockResolvedValue({} as never);
+		const test = createTestContext();
+		await test.seedUser();
 		await expect(
-			changeNameHandler({ data: { name: "Ann" }, context }),
+			changeNameHandler({ data: { name: "Ann" }, context: test.context }),
 		).resolves.toEqual({ ok: true });
-		expect(userAccount.updateName).toHaveBeenCalledWith({ name: "Ann" });
+		await expect(test.context.session().getUser()).resolves.toMatchObject({
+			name: "Ann",
+		});
 	});
 
 	it("is UNAUTHENTICATED when signed out", async () => {
-		const { context } = createTestContext({ user: null });
+		const { context } = createTestContext();
 		await expect(
 			throughMiddleware(changeNameHandler({ data: { name: "Ann" }, context })),
 		).rejects.toEqual(new AppError("UNAUTHENTICATED"));
 	});
 
-	it("maps Appwrite failures", async () => {
-		const { context, userAccount } = createTestContext({ user: aUser() });
-		userAccount.updateName.mockRejectedValue(new TypeError("fetch failed"));
+	it("surfaces backend failures", async () => {
+		const test = createTestContext();
+		await test.seedUser();
+		test.session.updateName.mockRejectedValueOnce(
+			new TypeError("fetch failed"),
+		);
 		await expect(
-			throughMiddleware(changeNameHandler({ data: { name: "Ann" }, context })),
+			throughMiddleware(
+				changeNameHandler({ data: { name: "Ann" }, context: test.context }),
+			),
 		).rejects.toEqual(new AppError("NETWORK"));
 	});
 });
 
 describe("updatePreferencesHandler", () => {
-	it("merges into the fresh prefs, not the context user's", async () => {
-		const { context, userAccount } = createTestContext({
-			user: aUser({ prefs: { ...DEFAULT_PREFS, locale: "en" } }),
+	it("merges into the stored prefs, not the context user's", async () => {
+		const test = createTestContext();
+		const { session } = await test.seedUser({
+			prefs: { locale: "it", theme: "light", onboardingCompleted: true },
 		});
-		userAccount.getPrefs.mockResolvedValue({
-			locale: "it",
-			theme: "light",
-			onboardingCompleted: true,
-			extra: "kept",
-		});
-		userAccount.updatePrefs.mockResolvedValue({} as never);
+		await test.context.getUser();
+		// Changed elsewhere after this request read the user.
+		await test.backend
+			.auth({ userAgent: undefined })
+			.session(session.token)
+			.updatePrefs({ locale: "en" });
 
 		const result = await updatePreferencesHandler({
 			data: { theme: "dark" },
-			context,
+			context: test.context,
 		});
 
-		const merged = {
-			locale: "it",
+		expect(result).toEqual({
+			locale: "en",
 			theme: "dark",
 			onboardingCompleted: true,
-			extra: "kept",
-		};
-		expect(userAccount.updatePrefs).toHaveBeenCalledWith({ prefs: merged });
-		expect(result).toEqual(merged);
+		});
 	});
 
 	it("never stamps defaults over prefs that were not saved (R39)", async () => {
-		const { context, userAccount } = createTestContext({ user: aUser() });
-		userAccount.getPrefs.mockResolvedValue({});
-		userAccount.updatePrefs.mockResolvedValue({} as never);
+		const test = createTestContext();
+		await test.seedUser({ prefs: {} });
+		// A missing locale must stay missing: readers fall back to the browser's.
 		await expect(
 			updatePreferencesHandler({
 				data: { onboardingCompleted: true },
-				context,
+				context: test.context,
 			}),
 		).resolves.toEqual({ onboardingCompleted: true });
-		// A missing locale must stay missing: readers fall back to the browser's.
-		expect(userAccount.updatePrefs).toHaveBeenCalledWith({
-			prefs: { onboardingCompleted: true },
-		});
 	});
 
 	it("writes the theme cookie when the theme changes", async () => {
-		const { context, userAccount, preferenceCookies } = createTestContext({
-			user: aUser(),
+		const test = createTestContext();
+		await test.seedUser();
+		await updatePreferencesHandler({
+			data: { theme: "dark" },
+			context: test.context,
 		});
-		userAccount.getPrefs.mockResolvedValue({ ...DEFAULT_PREFS });
-		userAccount.updatePrefs.mockResolvedValue({} as never);
-		await updatePreferencesHandler({ data: { theme: "dark" }, context });
-		expect(preferenceCookies.theme).toBe("dark");
-		expect(preferenceCookies.locale).toBeUndefined();
+		expect(test.preferenceCookies.theme).toBe("dark");
+		expect(test.preferenceCookies.locale).toBeUndefined();
 	});
 
 	it("writes the locale cookie when the locale changes", async () => {
-		const { context, userAccount, preferenceCookies } = createTestContext({
-			user: aUser(),
+		const test = createTestContext();
+		await test.seedUser();
+		await updatePreferencesHandler({
+			data: { locale: "it" },
+			context: test.context,
 		});
-		userAccount.getPrefs.mockResolvedValue({ ...DEFAULT_PREFS });
-		userAccount.updatePrefs.mockResolvedValue({} as never);
-		await updatePreferencesHandler({ data: { locale: "it" }, context });
-		expect(preferenceCookies.locale).toBe("it");
-		expect(preferenceCookies.theme).toBeUndefined();
+		expect(test.preferenceCookies.locale).toBe("it");
+		expect(test.preferenceCookies.theme).toBeUndefined();
 	});
 
-	it("writes no cookie and no prefs when saving fails", async () => {
-		const { context, userAccount, preferenceCookies } = createTestContext({
-			user: aUser(),
-		});
-		userAccount.getPrefs.mockResolvedValue({ ...DEFAULT_PREFS });
-		userAccount.updatePrefs.mockRejectedValue(new TypeError("fetch failed"));
+	it("writes no cookie when saving fails", async () => {
+		const test = createTestContext();
+		await test.seedUser();
+		test.session.updatePrefs.mockRejectedValueOnce(
+			new TypeError("fetch failed"),
+		);
 		await expect(
 			throughMiddleware(
-				updatePreferencesHandler({ data: { theme: "dark" }, context }),
+				updatePreferencesHandler({
+					data: { theme: "dark" },
+					context: test.context,
+				}),
 			),
 		).rejects.toEqual(new AppError("NETWORK"));
-		expect(preferenceCookies.theme).toBeUndefined();
+		expect(test.preferenceCookies.theme).toBeUndefined();
 	});
 
 	it("allows guests", async () => {
-		const { context, userAccount } = createTestContext({ user: aGuest() });
-		userAccount.getPrefs.mockResolvedValue({ ...DEFAULT_PREFS });
-		userAccount.updatePrefs.mockResolvedValue({} as never);
+		const test = createTestContext();
+		await test.seedGuest();
 		await expect(
-			updatePreferencesHandler({ data: { locale: "it" }, context }),
-		).resolves.toMatchObject({ locale: "it" });
+			updatePreferencesHandler({
+				data: { locale: "it" },
+				context: test.context,
+			}),
+		).resolves.toEqual({ ...DEFAULT_PREFS, locale: "it" });
 	});
 
 	it("is UNAUTHENTICATED when signed out", async () => {
-		const { context, userAccount } = createTestContext({ user: null });
+		const test = createTestContext();
 		await expect(
-			throughMiddleware(updatePreferencesHandler({ data: {}, context })),
+			throughMiddleware(
+				updatePreferencesHandler({ data: {}, context: test.context }),
+			),
 		).rejects.toEqual(new AppError("UNAUTHENTICATED"));
-		expect(userAccount.getPrefs).not.toHaveBeenCalled();
+		expect(test.session.updatePrefs).not.toHaveBeenCalled();
 	});
 });

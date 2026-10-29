@@ -30,9 +30,9 @@ export function requestSessionCookie(): SessionCookie {
 	return {
 		read: () => getCookie(SESSION_COOKIE),
 		write: (session) =>
-			setCookie(SESSION_COOKIE, session.secret, {
+			setCookie(SESSION_COOKIE, session.token, {
 				...scope(),
-				expires: new Date(session.expire),
+				expires: new Date(session.expiresAt),
 			}),
 		clear: () => deleteCookie(SESSION_COOKIE, scope()),
 	};

@@ -1,5 +1,5 @@
 import { z } from "zod/mini";
-import type { AppPrefs } from "#/lib/appwrite/app-models";
+import type { AppPrefs } from "#/core/prefs";
 import { emailSchema, nameSchema, passwordSchema } from "../auth/auth.schemas";
 
 export const changePasswordSchema = z.object({

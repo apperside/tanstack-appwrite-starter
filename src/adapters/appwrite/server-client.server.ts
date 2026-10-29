@@ -1,19 +1,18 @@
 import { Account, Client, TablesDB, Users } from "node-appwrite";
-import { publicEnv, serverEnv } from "#/config/env";
 import type { AppClient } from "./app-models";
 import { AdminTables, AppTables } from "./app-tables";
+import { appwritePublicEnv, appwriteServerEnv } from "./env";
 
 function baseClient(): Client {
-	return new Client()
-		.setEndpoint(publicEnv.APPWRITE_ENDPOINT)
-		.setProject(publicEnv.APPWRITE_PROJECT_ID);
+	const env = appwritePublicEnv();
+	return new Client().setEndpoint(env.ENDPOINT).setProject(env.PROJECT_ID);
 }
 
 /** Acts as the signed-in user. Builds a new client per call; never share one across requests. */
 export function createUserClient(sessionSecret: string): AppClient<"server"> {
 	const client = baseClient().setSession(sessionSecret);
 	const tables = new TablesDB(client);
-	const typed = new AppTables(tables, publicEnv.APPWRITE_DATABASE_ID);
+	const typed = new AppTables(tables, appwritePublicEnv().DATABASE_ID);
 	return {
 		client,
 		account: new Account(client),
@@ -28,7 +27,7 @@ export function createUserClient(sessionSecret: string): AppClient<"server"> {
 export function createAnonymousClient(): AppClient<"server"> {
 	const client = baseClient();
 	const tables = new TablesDB(client);
-	const typed = new AppTables(tables, publicEnv.APPWRITE_DATABASE_ID);
+	const typed = new AppTables(tables, appwritePublicEnv().DATABASE_ID);
 	return {
 		client,
 		account: new Account(client),
@@ -46,10 +45,10 @@ export function createAdminClient({
 }: {
 	forwardedUserAgent?: string;
 } = {}): AppClient<"admin"> {
-	const client = baseClient().setKey(serverEnv().APPWRITE_API_KEY);
+	const client = baseClient().setKey(appwriteServerEnv().APPWRITE_API_KEY);
 	if (forwardedUserAgent) client.setForwardedUserAgent(forwardedUserAgent);
 	const tables = new TablesDB(client);
-	const typed = new AdminTables(tables, publicEnv.APPWRITE_DATABASE_ID);
+	const typed = new AdminTables(tables, appwritePublicEnv().DATABASE_ID);
 	return {
 		client,
 		account: new Account(client),

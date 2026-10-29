@@ -1,8 +1,8 @@
-import type { AppClient } from "#/lib/appwrite/app-models";
+import type { AppData } from "#/core/backend";
 
 /**
  * Extension points for app-specific behavior. Apps replace the implementations
- * in this file; the boilerplate's defaults do nothing.
+ * in this file.
  */
 export const serverHooks = {
 	/**
@@ -10,10 +10,17 @@ export const serverHooks = {
 	 * deleted: move the guest's data to `userId` here. If it rejects, the guest is
 	 * kept and the sign-in fails.
 	 * Must be idempotent: the user may retry, which runs it again.
+	 * The default moves the example table's rows.
 	 */
-	async onGuestMerge(_args: {
+	async onGuestMerge({
+		guestUserId,
+		userId,
+		data,
+	}: {
 		guestUserId: string;
 		userId: string;
-		admin: AppClient<"admin">;
-	}): Promise<void> {},
+		data: AppData;
+	}): Promise<void> {
+		await data.todos.transferOwnership(guestUserId, userId);
+	},
 };

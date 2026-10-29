@@ -1,4 +1,5 @@
-import type { AppPrefs } from "#/lib/appwrite/app-models";
+import type { DeviceSession } from "#/core/auth/types";
+import type { AppPrefs } from "#/core/prefs";
 import { savePrefs } from "#/server/account-prefs.server";
 import type { HandlerArgs, Ok } from "#/server/context";
 import { requireRegisteredUser, requireUser } from "#/server/require-user";
@@ -8,30 +9,18 @@ import type {
 	ChangePasswordInput,
 	UpdatePreferencesInput,
 } from "./account.schemas";
-import type { SessionInfo } from "./account.types";
 
 /** The user's sessions, the current one first, then newest first. */
 export async function listSessionsHandler({
 	context,
-}: Pick<HandlerArgs<undefined>, "context">): Promise<SessionInfo[]> {
+}: Pick<HandlerArgs<undefined>, "context">): Promise<DeviceSession[]> {
 	await requireUser(context);
-	const { sessions } = await context.appwrite.user().account.listSessions();
-	return sessions
-		.map(
-			(s): SessionInfo => ({
-				id: s.$id,
-				current: s.current,
-				clientName: s.clientName,
-				osName: s.osName,
-				deviceName: s.deviceName,
-				createdAt: s.$createdAt,
-			}),
-		)
-		.sort(
-			(a, b) =>
-				Number(b.current) - Number(a.current) ||
-				Date.parse(b.createdAt) - Date.parse(a.createdAt),
-		);
+	const sessions = await context.session().listSessions();
+	return sessions.sort(
+		(a, b) =>
+			Number(b.current) - Number(a.current) ||
+			Date.parse(b.createdAt) - Date.parse(a.createdAt),
+	);
 }
 
 /** Changes the password; a wrong current password is `INVALID_CREDENTIALS`. */
@@ -40,7 +29,7 @@ export async function changePasswordHandler({
 	context,
 }: HandlerArgs<ChangePasswordInput>): Promise<Ok> {
 	await requireRegisteredUser(context);
-	await context.appwrite.user().account.updatePassword({
+	await context.session().updatePassword({
 		password: data.newPassword,
 		oldPassword: data.currentPassword,
 	});
@@ -53,11 +42,11 @@ export async function changeEmailHandler({
 	context,
 }: HandlerArgs<ChangeEmailInput>): Promise<Ok> {
 	await requireRegisteredUser(context);
-	const { account } = context.appwrite.user();
-	await account.updateEmail(data);
+	const session = context.session();
+	await session.updateEmail(data);
 	try {
-		await account.createVerification({
-			url: context.appLink("/verify-email"),
+		await session.sendVerification({
+			redirectUrl: context.appLink("/verify-email"),
 		});
 	} catch (error) {
 		// The email is already changed; the user can request another link later.
@@ -72,7 +61,7 @@ export async function changeNameHandler({
 	context,
 }: HandlerArgs<ChangeNameInput>): Promise<Ok> {
 	await requireUser(context);
-	await context.appwrite.user().account.updateName({ name: data.name });
+	await context.session().updateName(data.name);
 	return { ok: true };
 }
 

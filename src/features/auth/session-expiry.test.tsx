@@ -6,7 +6,7 @@ import {
 	redirect,
 } from "@tanstack/react-router";
 import { describe, expect, it, vi } from "vitest";
-import type { AppUser } from "#/lib/appwrite/app-models";
+import type { User } from "#/core/auth/types";
 import { AppError } from "#/lib/errors";
 import { resolveGuardRedirect } from "#/lib/guards";
 import { createQueryClient } from "#/lib/query-client";
@@ -20,7 +20,7 @@ vi.mock("./auth.functions", () => ({ getCurrentUser: vi.fn() }));
  * The app's wiring in miniature: the root reads the cached user, `/settings`
  * is guarded like `_authed` and its loader fails as a revoked session does.
  */
-function setup(user: AppUser | null) {
+function setup(user: User | null) {
 	const queryClient = createQueryClient({
 		onUnauthenticated: () => forgetExpiredSession({ queryClient, router }),
 	});

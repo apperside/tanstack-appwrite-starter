@@ -1,4 +1,4 @@
-import type { Locale } from "#/lib/appwrite/app-models";
+import type { Locale } from "#/core/prefs";
 import { readCookie } from "#/lib/cookies";
 
 export type { Locale };
@@ -43,7 +43,7 @@ function matchAcceptLanguage(header: string): Locale | undefined {
 }
 
 export type LocaleSources = {
-	/** `AppUser.prefs.locale` of the signed-in user. */
+	/** `User.prefs.locale` of the signed-in user. */
 	prefsLocale?: string;
 	/** The `locale` cookie. */
 	cookieLocale?: string;

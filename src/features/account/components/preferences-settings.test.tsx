@@ -1,8 +1,8 @@
 import { act, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { axe } from "vitest-axe";
+import { type AppPrefs, DEFAULT_PREFS } from "#/core/prefs";
 import { updatePreferences } from "#/features/account/account.functions";
-import { type AppPrefs, DEFAULT_PREFS } from "#/lib/appwrite/app-models";
 import { AppError } from "#/lib/errors";
 import { aGuest, aUser } from "#/test/fixtures";
 import { renderWithRouter } from "#/test/router";

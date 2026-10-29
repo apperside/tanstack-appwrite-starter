@@ -64,26 +64,37 @@ describe("recovery and verification schemas", () => {
 		});
 	});
 
-	it("requires a non-empty userId and secret", () => {
+	it("passes a link's parameters through, within bounds", () => {
 		const link = { userId: "u", secret: "s" };
-		expect(confirmVerificationSchema.safeParse(link).success).toBe(true);
-		expect(
-			confirmVerificationSchema.safeParse({ ...link, userId: "" }).success,
-		).toBe(false);
-		expect(
-			confirmVerificationSchema.safeParse({ ...link, secret: "" }).success,
-		).toBe(false);
+		expect(confirmVerificationSchema.parse({ link })).toEqual({ link });
+		expect(confirmVerificationSchema.parse({ link: { token: "t" } })).toEqual({
+			link: { token: "t" },
+		});
+		for (const bad of [
+			{},
+			{ userId: "" },
+			{ "": "x" },
+			{ k: "x".repeat(2049) },
+			Object.fromEntries(Array.from({ length: 9 }, (_, i) => [`k${i}`, "v"])),
+		]) {
+			expect(confirmVerificationSchema.safeParse({ link: bad }).success).toBe(
+				false,
+			);
+		}
 	});
 
 	it("validates the new password of a reset", () => {
-		const input = { userId: "u", secret: "s", password: "long-enough" };
+		const input = {
+			link: { userId: "u", secret: "s" },
+			password: "long-enough",
+		};
 		expect(resetPasswordSchema.safeParse(input).success).toBe(true);
 		expect(
 			resetPasswordSchema.safeParse({ ...input, password: "short" }).success,
 		).toBe(false);
-		expect(
-			resetPasswordSchema.safeParse({ ...input, secret: "" }).success,
-		).toBe(false);
+		expect(resetPasswordSchema.safeParse({ ...input, link: {} }).success).toBe(
+			false,
+		);
 	});
 });
 
@@ -116,9 +127,10 @@ describe("page search schemas", () => {
 		).toEqual({ userId: "65e12", secret: "s1" });
 	});
 
-	it("drops a malformed email link", () => {
+	it("drops empty and non-string values, and anything not an object", () => {
 		expect(
-			emailLinkSearchSchema.parse({ userId: "", secret: { x: 1 } }),
-		).toEqual({ userId: undefined, secret: undefined });
+			emailLinkSearchSchema.parse({ userId: "", secret: { x: 1 }, token: "t" }),
+		).toStrictEqual({ token: "t" });
+		expect(emailLinkSearchSchema.parse("junk")).toStrictEqual({});
 	});
 });

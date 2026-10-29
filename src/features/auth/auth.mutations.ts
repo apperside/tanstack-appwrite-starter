@@ -1,5 +1,5 @@
 import { appMutationOptions } from "tanstack-query-typed";
-import type { AppUser } from "#/lib/appwrite/app-models";
+import type { User } from "#/core/auth/types";
 import type { AppErrorCode } from "#/lib/errors";
 import type { Ok } from "#/server/context";
 import {
@@ -29,11 +29,11 @@ declare module "tanstack-query-typed" {
 		signOutEverywhere: {
 			response: Awaited<ReturnType<typeof signOutEverywhere>>;
 		};
-		signIn: { payload: SignInInput; response: AppUser };
-		signInAndMergeGuest: { payload: SignInInput; response: AppUser };
-		signUp: { payload: SignUpInput; response: AppUser };
-		upgradeGuest: { payload: SignUpInput; response: AppUser };
-		startGuestSession: { response: AppUser };
+		signIn: { payload: SignInInput; response: User };
+		signInAndMergeGuest: { payload: SignInInput; response: User };
+		signUp: { payload: SignUpInput; response: User };
+		upgradeGuest: { payload: SignUpInput; response: User };
+		startGuestSession: { response: User };
 		requestPasswordReset: { payload: RequestResetInput; response: Ok };
 		resetPassword: { payload: ResetPasswordInput; response: Ok };
 		sendVerification: { response: Ok };
@@ -56,7 +56,7 @@ export const signOutEverywhereMutation = {
 	nextUser: null,
 };
 
-const returnedUser = (user: AppUser) => user;
+const returnedUser = (user: User) => user;
 
 export const signInMutation = {
 	...appMutationOptions(["signIn"], {

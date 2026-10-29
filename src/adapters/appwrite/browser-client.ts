@@ -1,10 +1,11 @@
 import { Account, Client, TablesDB } from "appwrite";
 import type { TablesDB as ServerTablesDB } from "node-appwrite";
-import { publicEnv } from "#/config/env";
-import { issueBrowserJwt } from "#/features/auth/auth.functions";
 import { toAppError } from "#/lib/errors";
 import { AppTables } from "./app-tables";
+import { appwritePublicEnv } from "./env";
+import { fromAppwriteError } from "./errors";
 import { createJwtSession } from "./jwt-session";
+import { issueBrowserJwt } from "./realtime.functions";
 
 type BrowserClient = {
 	client: Client;
@@ -13,14 +14,15 @@ type BrowserClient = {
 };
 
 function createBrowserHandles(): BrowserClient {
+	const env = appwritePublicEnv();
 	const client = new Client()
-		.setEndpoint(publicEnv.APPWRITE_ENDPOINT)
-		.setProject(publicEnv.APPWRITE_PROJECT_ID);
+		.setEndpoint(env.ENDPOINT)
+		.setProject(env.PROJECT_ID);
 	const tables = new TablesDB(client);
 	// AppTables is typed against node-appwrite's TablesDB; the browser SDK's has the same object-form methods.
 	const typed = new AppTables(
 		tables as unknown as ServerTablesDB,
-		publicEnv.APPWRITE_DATABASE_ID,
+		env.DATABASE_ID,
 	);
 	return {
 		client,
@@ -28,6 +30,9 @@ function createBrowserHandles(): BrowserClient {
 		tables: Object.assign(tables, { typed }),
 	};
 }
+
+/** The `AppError` code of a browser SDK (or a server function) failure. */
+const codeOf = (error: unknown) => toAppError(fromAppwriteError(error)).code;
 
 /**
  * Builds the runner behind `withBrowserClient`. The SDK client is created on the
@@ -51,13 +56,13 @@ export function createBrowserRunner(deps: { issueJwt: () => Promise<string> }) {
 		try {
 			return await attempt(run);
 		} catch (error) {
-			if (toAppError(error).code !== "UNAUTHENTICATED") throw error;
+			if (codeOf(error) !== "UNAUTHENTICATED") throw error;
 			// The JWT expired or its session ended: renew once, then give up.
 			session.invalidate();
 			try {
 				return await attempt(run);
 			} catch (retryError) {
-				const appError = toAppError(retryError);
+				const appError = toAppError(fromAppwriteError(retryError));
 				throw appError.code === "UNAUTHENTICATED" ? appError : retryError;
 			}
 		}

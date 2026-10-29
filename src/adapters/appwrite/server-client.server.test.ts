@@ -6,13 +6,13 @@ import {
 	createUserClient,
 } from "./server-client.server";
 
-vi.mock("#/config/env", () => ({
-	publicEnv: {
-		APPWRITE_ENDPOINT: "https://appwrite.test/v1",
-		APPWRITE_PROJECT_ID: "project",
-		APPWRITE_DATABASE_ID: "db",
-	},
-	serverEnv: () => ({ APPWRITE_API_KEY: "key", APP_URL: "https://app.test" }),
+vi.mock("./env", () => ({
+	appwritePublicEnv: () => ({
+		ENDPOINT: "https://appwrite.test/v1",
+		PROJECT_ID: "project",
+		DATABASE_ID: "db",
+	}),
+	appwriteServerEnv: () => ({ APPWRITE_API_KEY: "key" }),
 }));
 
 describe("server clients", () => {

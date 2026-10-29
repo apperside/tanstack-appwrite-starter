@@ -1,16 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { DEFAULT_PREFS } from "#/lib/appwrite/app-models";
+import { DEFAULT_PREFS } from "#/core/prefs";
 import { AppError } from "#/lib/errors";
 import type { ServerContext } from "#/server/context";
 import { serverHooks } from "#/server/server-hooks.server";
-import { appwriteError } from "#/test/appwrite-error";
-import { aGuest, aGuestSession, aJwt, aSession, aUser } from "#/test/fixtures";
 import { createTestContext } from "#/test/test-context";
 import { throughMiddleware } from "#/test/through-middleware";
 import {
 	confirmVerificationHandler,
 	getCurrentUserHandler,
-	issueBrowserJwtHandler,
 	requestPasswordResetHandler,
 	resetPasswordHandler,
 	sendVerificationHandler,
@@ -23,268 +20,229 @@ import {
 	upgradeGuestHandler,
 } from "./auth.handlers.server";
 
+const credentials = { email: "ann@example.test", password: "password1" };
+const signUpData = { name: "Ann", ...credentials };
+
+const rateLimited = () => {
+	throw new AppError("RATE_LIMITED");
+};
+
+afterEach(() => vi.restoreAllMocks());
+
 describe("getCurrentUserHandler", () => {
 	it("returns null when signed out", async () => {
-		const { context } = createTestContext({ user: null });
+		const { context } = createTestContext();
 		await expect(getCurrentUserHandler({ context })).resolves.toBeNull();
 	});
 
 	it("returns the signed-in user", async () => {
-		const user = aUser();
-		const { context } = createTestContext({ user });
-		await expect(getCurrentUserHandler({ context })).resolves.toEqual(user);
-	});
-});
-
-describe("issueBrowserJwtHandler", () => {
-	it("mints a JWT for the user and current session", async () => {
-		const { context, userAccount, adminUsers } = createTestContext({
-			user: aUser({ $id: "u-9" }),
-		});
-		userAccount.getSession.mockResolvedValue(aSession({ $id: "s-9" }));
-		adminUsers.createJWT.mockResolvedValue(aJwt());
-
-		const result = await issueBrowserJwtHandler({ context });
-
-		expect(result).toEqual({ jwt: aJwt().jwt });
-		expect(userAccount.getSession).toHaveBeenCalledWith({
-			sessionId: "current",
-		});
-		expect(adminUsers.createJWT).toHaveBeenCalledWith({
-			userId: "u-9",
-			sessionId: "s-9",
-		});
-	});
-
-	it("rejects with UNAUTHENTICATED without touching admin when signed out", async () => {
-		const { context, adminUsers } = createTestContext({ user: null });
+		const test = createTestContext();
+		const { user } = await test.seedUser();
 		await expect(
-			throughMiddleware(issueBrowserJwtHandler({ context })),
-		).rejects.toEqual(new AppError("UNAUTHENTICATED"));
-		expect(adminUsers.createJWT).not.toHaveBeenCalled();
+			getCurrentUserHandler({ context: test.context }),
+		).resolves.toEqual(user);
 	});
 });
-
-const credentials = { email: "ann@example.com", password: "password1" };
 
 describe("signInHandler", () => {
 	it("writes the session cookie and returns the user", async () => {
-		const user = aUser();
-		const { context, adminAccount, userAccount, sessionCookie, forSession } =
-			createTestContext();
-		adminAccount.createEmailPasswordSession.mockResolvedValue(aSession());
-		userAccount.get.mockResolvedValue(user);
-
-		await expect(signInHandler({ data: credentials, context })).resolves.toBe(
-			user,
-		);
-
-		expect(adminAccount.createEmailPasswordSession).toHaveBeenCalledWith(
-			credentials,
-		);
-		expect(sessionCookie.value).toBe(aSession().secret);
-		expect(forSession).toHaveBeenCalledWith(aSession().secret);
+		const test = createTestContext();
+		const { user } = await test.seedUser({ ...credentials, signIn: false });
+		await expect(
+			signInHandler({ data: credentials, context: test.context }),
+		).resolves.toEqual(user);
+		expect(test.auth.signIn).toHaveBeenCalledWith(credentials);
+		const session = await test.auth.signIn.mock.results[0]?.value;
+		expect(test.sessionCookie.value).toBe(session.token);
 	});
 
 	it("rate-limits by ip and by ip plus email", async () => {
-		const { context, adminAccount, userAccount, rateLimit } = createTestContext(
-			{ clientIp: "198.51.100.7" },
-		);
-		adminAccount.createEmailPasswordSession.mockResolvedValue(aSession());
-		userAccount.get.mockResolvedValue(aUser());
-		await signInHandler({ data: credentials, context });
-		expect(rateLimit).toHaveBeenNthCalledWith(1, "signIn", "198.51.100.7");
-		expect(rateLimit).toHaveBeenNthCalledWith(
+		const test = createTestContext({ clientIp: "198.51.100.7" });
+		await test.seedUser({ ...credentials, signIn: false });
+		await signInHandler({ data: credentials, context: test.context });
+		expect(test.rateLimit).toHaveBeenNthCalledWith(1, "signIn", "198.51.100.7");
+		expect(test.rateLimit).toHaveBeenNthCalledWith(
 			2,
 			"signInEmail",
-			"198.51.100.7|ann@example.com",
+			"198.51.100.7|ann@example.test",
 		);
 	});
 
-	it("maps invalid credentials and leaves the cookie untouched", async () => {
-		const { context, adminAccount, sessionCookie } = createTestContext();
-		adminAccount.createEmailPasswordSession.mockRejectedValue(
-			appwriteError("user_invalid_credentials", 401),
-		);
+	it("rejects invalid credentials and leaves the cookie untouched", async () => {
+		const test = createTestContext();
+		await test.seedUser({ ...credentials, signIn: false });
 		await expect(
-			throughMiddleware(signInHandler({ data: credentials, context })),
+			throughMiddleware(
+				signInHandler({
+					data: { ...credentials, password: "wrong-password" },
+					context: test.context,
+				}),
+			),
 		).rejects.toEqual(new AppError("INVALID_CREDENTIALS"));
-		expect(sessionCookie.value).toBeUndefined();
+		expect(test.sessionCookie.value).toBeUndefined();
 	});
 
-	it("never calls Appwrite when rate limited", async () => {
-		const { context, adminAccount, rateLimit } = createTestContext();
-		rateLimit.mockImplementation(() => {
-			throw new AppError("RATE_LIMITED");
-		});
+	it("never calls the backend when rate limited", async () => {
+		const test = createTestContext();
+		test.rateLimit.mockImplementation(rateLimited);
 		await expect(
-			throughMiddleware(signInHandler({ data: credentials, context })),
+			throughMiddleware(
+				signInHandler({ data: credentials, context: test.context }),
+			),
 		).rejects.toEqual(new AppError("RATE_LIMITED"));
-		expect(adminAccount.createEmailPasswordSession).not.toHaveBeenCalled();
+		expect(test.auth.signIn).not.toHaveBeenCalled();
 	});
 });
 
 describe("signUpHandler", () => {
-	const data = { name: "Ann", ...credentials };
-
-	function arrange() {
-		const test = createTestContext();
-		test.adminAccount.create.mockResolvedValue(aUser());
-		test.adminAccount.createEmailPasswordSession.mockResolvedValue(aSession());
-		test.userAccount.updatePrefs.mockResolvedValue(aUser());
-		test.userAccount.get.mockResolvedValue(aUser());
-		test.userAccount.createVerification.mockResolvedValue({} as never);
-		return test;
-	}
-
 	it("creates the account, signs in, sets default prefs and sends the verification email", async () => {
-		const { context, adminAccount, userAccount, sessionCookie, rateLimit } =
-			arrange();
-
-		await expect(signUpHandler({ data, context })).resolves.toEqual(aUser());
-
-		expect(rateLimit).toHaveBeenCalledWith("signUp", "203.0.113.1");
-		expect(adminAccount.create).toHaveBeenCalledWith({
-			userId: expect.any(String),
-			...data,
+		const test = createTestContext();
+		const user = await signUpHandler({
+			data: signUpData,
+			context: test.context,
 		});
-		expect(sessionCookie.value).toBe(aSession().secret);
-		expect(userAccount.updatePrefs).toHaveBeenCalledWith({
+
+		expect(user).toMatchObject({
+			name: "Ann",
+			email: credentials.email,
+			emailVerified: false,
 			prefs: DEFAULT_PREFS,
 		});
-		expect(userAccount.createVerification).toHaveBeenCalledWith({
-			url: "http://app.test/verify-email",
-		});
+		expect(test.rateLimit).toHaveBeenCalledWith("signUp", "203.0.113.1");
+		expect(test.auth.signUp).toHaveBeenCalledWith(signUpData);
+		await expect(test.context.getUser()).resolves.toEqual(user);
+		expect(test.emails).toEqual([
+			expect.objectContaining({
+				to: credentials.email,
+				purpose: "verification",
+				url: expect.stringMatching(/^http:\/\/app\.test\/verify-email\?/),
+			}),
+		]);
 	});
 
-	it("maps an existing account to EMAIL_TAKEN", async () => {
-		const { context, adminAccount, sessionCookie } = arrange();
-		adminAccount.create.mockRejectedValue(
-			appwriteError("user_already_exists", 409),
-		);
+	it("rejects an existing account as EMAIL_TAKEN", async () => {
+		const test = createTestContext();
+		await test.seedUser({ ...credentials, signIn: false });
 		await expect(
-			throughMiddleware(signUpHandler({ data, context })),
+			throughMiddleware(
+				signUpHandler({ data: signUpData, context: test.context }),
+			),
 		).rejects.toEqual(new AppError("EMAIL_TAKEN"));
-		expect(sessionCookie.value).toBeUndefined();
+		expect(test.sessionCookie.value).toBeUndefined();
 	});
 
 	it("still resolves the user when saving the default prefs fails", async () => {
-		const { context, userAccount } = arrange();
+		const test = createTestContext();
 		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-		userAccount.updatePrefs.mockRejectedValue(new Error("boom"));
-		await expect(signUpHandler({ data, context })).resolves.toEqual(aUser());
+		test.session.updatePrefs.mockRejectedValueOnce(new Error("boom"));
+		await expect(
+			signUpHandler({ data: signUpData, context: test.context }),
+		).resolves.toMatchObject({ email: credentials.email, prefs: {} });
 		expect(warn).toHaveBeenCalled();
-		warn.mockRestore();
 	});
 
 	it("still resolves the user when the verification email fails", async () => {
-		const { context, userAccount } = arrange();
+		const test = createTestContext();
 		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-		userAccount.createVerification.mockRejectedValue(new Error("smtp down"));
-		await expect(signUpHandler({ data, context })).resolves.toEqual(aUser());
+		test.session.sendVerification.mockRejectedValueOnce(new Error("smtp"));
+		await expect(
+			signUpHandler({ data: signUpData, context: test.context }),
+		).resolves.toMatchObject({ email: credentials.email });
 		expect(warn).toHaveBeenCalled();
-		warn.mockRestore();
 	});
 
-	it("never calls Appwrite when rate limited", async () => {
-		const { context, adminAccount, rateLimit } = arrange();
-		rateLimit.mockImplementation(() => {
-			throw new AppError("RATE_LIMITED");
-		});
+	it("never calls the backend when rate limited", async () => {
+		const test = createTestContext();
+		test.rateLimit.mockImplementation(rateLimited);
 		await expect(
-			throughMiddleware(signUpHandler({ data, context })),
+			throughMiddleware(
+				signUpHandler({ data: signUpData, context: test.context }),
+			),
 		).rejects.toEqual(new AppError("RATE_LIMITED"));
-		expect(adminAccount.create).not.toHaveBeenCalled();
+		expect(test.auth.signUp).not.toHaveBeenCalled();
 	});
 });
 
 describe("signOutHandler", () => {
 	it("forgets the dismissed guest banner", async () => {
-		const { context, userAccount, preferenceCookies } = createTestContext({
-			user: aGuest(),
-		});
-		userAccount.deleteSession.mockResolvedValue({} as never);
-		await signOutHandler({ context });
-		expect(preferenceCookies.guestBannerCleared).toBe(true);
+		const test = createTestContext();
+		await test.seedGuest();
+		await signOutHandler({ context: test.context });
+		expect(test.preferenceCookies.guestBannerCleared).toBe(true);
 	});
 
-	it("deletes the current session and clears the cookie", async () => {
-		const { context, userAccount, sessionCookie } = createTestContext({
-			user: aUser(),
-		});
-		userAccount.deleteSession.mockResolvedValue({} as never);
-		await signOutHandler({ context });
-		expect(userAccount.deleteSession).toHaveBeenCalledWith({
-			sessionId: "current",
-		});
-		expect(sessionCookie.value).toBeUndefined();
+	it("ends the current session and clears the cookie", async () => {
+		const test = createTestContext();
+		const { session } = await test.seedUser();
+		await signOutHandler({ context: test.context });
+		expect(test.session.signOut).toHaveBeenCalledWith(session.token);
+		expect(test.sessionCookie.value).toBeUndefined();
+		await expect(
+			test.backend
+				.auth({ userAgent: undefined })
+				.session(session.token)
+				.getUser(),
+		).rejects.toEqual(new AppError("UNAUTHENTICATED"));
 	});
 
-	it("clears the cookie even when Appwrite rejects", async () => {
-		const { context, userAccount, sessionCookie } = createTestContext({
-			user: aUser(),
-		});
-		userAccount.deleteSession.mockRejectedValue(new Error("boom"));
-		await signOutHandler({ context });
-		expect(sessionCookie.value).toBeUndefined();
+	it("clears the cookie even when the backend rejects", async () => {
+		const test = createTestContext();
+		await test.seedUser();
+		vi.spyOn(console, "warn").mockImplementation(() => {});
+		test.session.signOut.mockRejectedValueOnce(new Error("boom"));
+		await signOutHandler({ context: test.context });
+		expect(test.sessionCookie.value).toBeUndefined();
 	});
 
-	it("clears the cookie when there is no session to delete", async () => {
-		const { context, sessionCookie } = createTestContext({
-			user: null,
-			sessionSecret: "stale",
-		});
-		await signOutHandler({ context });
-		expect(sessionCookie.value).toBeUndefined();
+	it("clears the cookie when there is no session to end", async () => {
+		const test = createTestContext();
+		vi.spyOn(console, "warn").mockImplementation(() => {});
+		test.sessionCookie.value = "stale";
+		await signOutHandler({ context: test.context });
+		expect(test.sessionCookie.value).toBeUndefined();
 	});
 });
 
 describe("signOutEverywhereHandler", () => {
-	it("forgets the dismissed guest banner", async () => {
-		const { context, userAccount, preferenceCookies } = createTestContext({
-			user: aUser(),
-		});
-		userAccount.deleteSessions.mockResolvedValue({} as never);
-		await signOutEverywhereHandler({ context });
-		expect(preferenceCookies.guestBannerCleared).toBe(true);
-	});
-
-	it("deletes every session and clears the cookie", async () => {
-		const { context, userAccount, sessionCookie } = createTestContext({
-			user: aUser(),
-		});
-		userAccount.deleteSessions.mockResolvedValue({} as never);
-		await signOutEverywhereHandler({ context });
-		expect(userAccount.deleteSessions).toHaveBeenCalledOnce();
-		expect(sessionCookie.value).toBeUndefined();
-	});
-
-	it("clears the cookie and resolves when the session already expired", async () => {
-		const { context, userAccount, sessionCookie } = createTestContext({
-			user: aUser(),
-		});
-		userAccount.deleteSessions.mockRejectedValue(
-			appwriteError("user_unauthorized", 401),
-		);
+	it("ends every session, clears the cookie and forgets the guest banner", async () => {
+		const test = createTestContext();
+		const { session } = await test.seedUser(credentials);
+		const other = await test.backend
+			.auth({ userAgent: undefined })
+			.signIn(credentials);
+		await signOutEverywhereHandler({ context: test.context });
+		expect(test.session.signOutEverywhere).toHaveBeenCalledWith(session.token);
+		expect(test.sessionCookie.value).toBeUndefined();
+		expect(test.preferenceCookies.guestBannerCleared).toBe(true);
 		await expect(
-			signOutEverywhereHandler({ context }),
+			test.backend
+				.auth({ userAgent: undefined })
+				.session(other.token)
+				.getUser(),
+		).rejects.toEqual(new AppError("UNAUTHENTICATED"));
+	});
+
+	it("clears the cookie and resolves when the session already ended", async () => {
+		const test = createTestContext();
+		test.sessionCookie.value = "stale";
+		await expect(
+			signOutEverywhereHandler({ context: test.context }),
 		).resolves.toBeUndefined();
-		expect(sessionCookie.value).toBeUndefined();
+		expect(test.sessionCookie.value).toBeUndefined();
 	});
 
 	it("keeps the cookie and rethrows other errors", async () => {
-		const { context, userAccount, sessionCookie } = createTestContext({
-			user: aUser(),
-		});
-		userAccount.deleteSessions.mockRejectedValue(new Error("boom"));
+		const test = createTestContext();
+		const { session } = await test.seedUser();
+		test.session.signOutEverywhere.mockRejectedValueOnce(new Error("boom"));
 		await expect(
-			throughMiddleware(signOutEverywhereHandler({ context })),
+			throughMiddleware(signOutEverywhereHandler({ context: test.context })),
 		).rejects.toEqual(new AppError("UNKNOWN"));
-		expect(sessionCookie.value).toBe(aSession().secret);
+		expect(test.sessionCookie.value).toBe(session.token);
 	});
 
 	it("resolves when there is no session at all", async () => {
-		const { context } = createTestContext({ user: null });
+		const { context } = createTestContext();
 		await expect(
 			signOutEverywhereHandler({ context }),
 		).resolves.toBeUndefined();
@@ -292,297 +250,231 @@ describe("signOutEverywhereHandler", () => {
 });
 
 describe("startGuestSessionHandler", () => {
-	function arrange() {
-		const test = createTestContext();
-		test.adminAccount.createAnonymousSession.mockResolvedValue(
-			aGuestSession({ secret: "guest-secret" }),
-		);
-		test.userAccount.updatePrefs.mockResolvedValue(aGuest());
-		test.userAccount.get.mockResolvedValue(aGuest());
-		return test;
-	}
-
 	it("rate-limits, writes the cookie, saves default prefs and returns the guest", async () => {
-		const { context, sessionCookie, userAccount, forSession, rateLimit } =
-			arrange();
-
-		await expect(startGuestSessionHandler({ context })).resolves.toEqual(
-			aGuest(),
-		);
-
-		expect(rateLimit).toHaveBeenCalledWith("guest", "203.0.113.1");
-		expect(sessionCookie.value).toBe("guest-secret");
-		expect(forSession).toHaveBeenCalledWith("guest-secret");
-		expect(userAccount.updatePrefs).toHaveBeenCalledWith({
-			prefs: DEFAULT_PREFS,
-		});
+		const test = createTestContext();
+		const guest = await startGuestSessionHandler({ context: test.context });
+		expect(guest).toMatchObject({ isGuest: true, prefs: DEFAULT_PREFS });
+		expect(test.rateLimit).toHaveBeenCalledWith("guest", "203.0.113.1");
+		await expect(test.context.getUser()).resolves.toEqual(guest);
 	});
 
 	it("shows a new guest the banner, even if a previous guest dismissed it", async () => {
-		const { context, preferenceCookies } = arrange();
-		await startGuestSessionHandler({ context });
-		expect(preferenceCookies.guestBannerCleared).toBe(true);
+		const test = createTestContext();
+		await startGuestSessionHandler({ context: test.context });
+		expect(test.preferenceCookies.guestBannerCleared).toBe(true);
 	});
 
-	it("never calls Appwrite when rate limited", async () => {
-		const { context, adminAccount, rateLimit } = arrange();
-		rateLimit.mockImplementation(() => {
-			throw new AppError("RATE_LIMITED");
-		});
+	it("never calls the backend when rate limited", async () => {
+		const test = createTestContext();
+		test.rateLimit.mockImplementation(rateLimited);
 		await expect(
-			throughMiddleware(startGuestSessionHandler({ context })),
+			throughMiddleware(startGuestSessionHandler({ context: test.context })),
 		).rejects.toEqual(new AppError("RATE_LIMITED"));
-		expect(adminAccount.createAnonymousSession).not.toHaveBeenCalled();
+		expect(test.auth.startGuest).not.toHaveBeenCalled();
 	});
 
 	it("leaves the cookie untouched when the session cannot be created", async () => {
-		const { context, adminAccount, sessionCookie } = arrange();
-		adminAccount.createAnonymousSession.mockRejectedValue(new Error("down"));
+		const test = createTestContext();
+		test.auth.startGuest.mockRejectedValueOnce(new Error("down"));
 		await expect(
-			throughMiddleware(startGuestSessionHandler({ context })),
+			throughMiddleware(startGuestSessionHandler({ context: test.context })),
 		).rejects.toEqual(new AppError("UNKNOWN"));
-		expect(sessionCookie.value).toBeUndefined();
+		expect(test.sessionCookie.value).toBeUndefined();
 	});
 
 	it("still resolves the guest when saving the default prefs fails", async () => {
-		const { context, userAccount } = arrange();
+		const test = createTestContext();
 		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-		userAccount.updatePrefs.mockRejectedValue(new Error("boom"));
-		await expect(startGuestSessionHandler({ context })).resolves.toEqual(
-			aGuest(),
-		);
+		test.session.updatePrefs.mockRejectedValueOnce(new Error("boom"));
+		await expect(
+			startGuestSessionHandler({ context: test.context }),
+		).resolves.toMatchObject({ isGuest: true });
 		expect(warn).toHaveBeenCalled();
-		warn.mockRestore();
 	});
 });
 
 describe("upgradeGuestHandler", () => {
-	const data = { name: "Ann", ...credentials };
-
-	function arrange() {
-		const guest = aGuest();
-		const test = createTestContext({
-			user: guest,
-			sessionSecret: "guest-secret",
+	it("converts the guest in place, keeps the session the backend returns and sends the verification email", async () => {
+		const test = createTestContext();
+		const { user: guest } = await test.seedGuest();
+		const user = await upgradeGuestHandler({
+			data: signUpData,
+			context: test.context,
 		});
-		test.userAccount.updateEmail.mockResolvedValue(guest);
-		test.userAccount.updateName.mockResolvedValue(guest);
-		test.userAccount.deleteSession.mockResolvedValue({} as never);
-		test.userAccount.createVerification.mockResolvedValue({} as never);
-		test.adminAccount.createEmailPasswordSession.mockResolvedValue(
-			aSession({ secret: "new-secret", userId: guest.$id }),
-		);
-		test.userAccount.get.mockResolvedValue({
-			...guest,
-			email: data.email,
-			name: data.name,
+		expect(user).toMatchObject({
+			id: guest.id,
+			email: credentials.email,
+			name: "Ann",
+			isGuest: false,
 		});
-		const cookieWrite = vi.spyOn(test.sessionCookie, "write");
-		return { ...test, guest, cookieWrite };
-	}
-
-	it("converts the guest in place, then creates the new session, writes the cookie and drops the old session, in that order", async () => {
-		const {
-			context,
-			userAccount,
-			adminAccount,
-			sessionCookie,
-			guest,
-			cookieWrite,
-		} = arrange();
-
-		const user = await upgradeGuestHandler({ data, context });
-
-		expect(user.$id).toBe(guest.$id);
-		expect(user.email).toBe(data.email);
-		expect(userAccount.updateEmail).toHaveBeenCalledWith({
-			email: data.email,
-			password: data.password,
-		});
-		expect(userAccount.updateName).toHaveBeenCalledWith({ name: data.name });
-		expect(adminAccount.createEmailPasswordSession).toHaveBeenCalledWith(
-			credentials,
-		);
-		expect(userAccount.deleteSession).toHaveBeenCalledWith({
-			sessionId: "current",
-		});
-		expect(userAccount.createVerification).toHaveBeenCalledWith({
-			url: "http://app.test/verify-email",
-		});
-		expect(sessionCookie.value).toBe("new-secret");
-		const order = [
-			userAccount.updateEmail.mock.invocationCallOrder[0],
-			userAccount.updateName.mock.invocationCallOrder[0],
-			adminAccount.createEmailPasswordSession.mock.invocationCallOrder[0],
-			cookieWrite.mock.invocationCallOrder[0],
-			userAccount.deleteSession.mock.invocationCallOrder[0],
-		];
-		expect(order).toEqual([...order].sort((a, b) => (a ?? 0) - (b ?? 0)));
-		expect(new Set(order).size).toBe(5);
+		const kept = await test.session.upgradeGuest.mock.results[0]?.value;
+		expect(test.sessionCookie.value).toBe(kept.token);
+		expect(test.emails).toEqual([
+			expect.objectContaining({ purpose: "verification" }),
+		]);
 	});
 
-	it("keeps the guest cookie when the new session cannot be created", async () => {
-		const { context, adminAccount, userAccount, sessionCookie } = arrange();
-		adminAccount.createEmailPasswordSession.mockRejectedValue(
-			new Error("down"),
-		);
+	it("writes the cookie of a new session when the backend swaps it", async () => {
+		const test = createTestContext();
+		await test.seedGuest();
+		const swapped = await test.backend
+			.auth({ userAgent: undefined })
+			.signUp({ ...signUpData, email: "other@example.test" });
+		test.session.upgradeGuest.mockResolvedValueOnce(swapped);
+		await upgradeGuestHandler({ data: signUpData, context: test.context });
+		expect(test.sessionCookie.value).toBe(swapped.token);
+	});
+
+	it("keeps the guest cookie when the upgrade fails", async () => {
+		const test = createTestContext();
+		const { session } = await test.seedGuest();
+		await test.seedUser({ ...credentials, signIn: false });
+		test.sessionCookie.value = session.token;
 		await expect(
-			throughMiddleware(upgradeGuestHandler({ data, context })),
-		).rejects.toEqual(new AppError("UNKNOWN"));
-		expect(sessionCookie.value).toBe("guest-secret");
-		expect(userAccount.deleteSession).not.toHaveBeenCalled();
+			throughMiddleware(
+				upgradeGuestHandler({ data: signUpData, context: test.context }),
+			),
+		).rejects.toEqual(new AppError("EMAIL_TAKEN"));
+		expect(test.sessionCookie.value).toBe(session.token);
 	});
 
-	it("still upgrades when saving the name, dropping the old session or sending the email fails", async () => {
-		const { context, userAccount, sessionCookie } = arrange();
+	it("still upgrades when the verification email fails", async () => {
+		const test = createTestContext();
+		await test.seedGuest();
 		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-		userAccount.updateName.mockRejectedValue(new Error("a"));
-		userAccount.deleteSession.mockRejectedValue(new Error("b"));
-		userAccount.createVerification.mockRejectedValue(new Error("c"));
-		await expect(upgradeGuestHandler({ data, context })).resolves.toMatchObject(
-			{ email: data.email },
-		);
-		expect(warn).toHaveBeenCalledTimes(3);
-		expect(sessionCookie.value).toBe("new-secret");
-		warn.mockRestore();
+		test.session.sendVerification.mockRejectedValueOnce(new Error("smtp"));
+		await expect(
+			upgradeGuestHandler({ data: signUpData, context: test.context }),
+		).resolves.toMatchObject({ email: credentials.email });
+		expect(warn).toHaveBeenCalledOnce();
 	});
 
-	it("rejects FORBIDDEN for a non-guest without touching Appwrite", async () => {
-		const { context, userAccount } = createTestContext({ user: aUser() });
+	it("rejects FORBIDDEN for a non-guest without touching the backend", async () => {
+		const test = createTestContext();
+		await test.seedUser();
 		await expect(
-			throughMiddleware(upgradeGuestHandler({ data, context })),
+			throughMiddleware(
+				upgradeGuestHandler({ data: signUpData, context: test.context }),
+			),
 		).rejects.toEqual(new AppError("FORBIDDEN"));
-		expect(userAccount.updateEmail).not.toHaveBeenCalled();
+		expect(test.session.upgradeGuest).not.toHaveBeenCalled();
 	});
 
 	it("rejects UNAUTHENTICATED when signed out", async () => {
-		const { context } = createTestContext({ user: null });
+		const { context } = createTestContext();
 		await expect(
-			throughMiddleware(upgradeGuestHandler({ data, context })),
+			throughMiddleware(upgradeGuestHandler({ data: signUpData, context })),
 		).rejects.toEqual(new AppError("UNAUTHENTICATED"));
 	});
 
-	it("propagates EMAIL_TAKEN and keeps the guest cookie", async () => {
-		const { context, userAccount, sessionCookie } = arrange();
-		userAccount.updateEmail.mockRejectedValue(
-			appwriteError("user_already_exists", 409),
-		);
+	it("rate-limits like sign-up before any backend call", async () => {
+		const test = createTestContext();
+		await test.seedGuest();
+		test.rateLimit.mockImplementation(rateLimited);
 		await expect(
-			throughMiddleware(upgradeGuestHandler({ data, context })),
-		).rejects.toEqual(new AppError("EMAIL_TAKEN"));
-		expect(userAccount.updateName).not.toHaveBeenCalled();
-		expect(sessionCookie.value).toBe("guest-secret");
-	});
-
-	it("rate-limits like sign-up before any Appwrite call", async () => {
-		const { context, userAccount, rateLimit } = arrange();
-		rateLimit.mockImplementation(() => {
-			throw new AppError("RATE_LIMITED");
-		});
-		await expect(
-			throughMiddleware(upgradeGuestHandler({ data, context })),
+			throughMiddleware(
+				upgradeGuestHandler({ data: signUpData, context: test.context }),
+			),
 		).rejects.toEqual(new AppError("RATE_LIMITED"));
-		expect(rateLimit).toHaveBeenCalledWith("signUp", "203.0.113.1");
-		expect(userAccount.updateEmail).not.toHaveBeenCalled();
+		expect(test.rateLimit).toHaveBeenCalledWith("signUp", "203.0.113.1");
+		expect(test.session.upgradeGuest).not.toHaveBeenCalled();
 	});
 });
 
 describe("signInAndMergeGuestHandler", () => {
-	function arrange() {
-		const guest = aGuest();
-		const test = createTestContext({
-			user: guest,
-			sessionSecret: "guest-secret",
-		});
-		test.adminAccount.createEmailPasswordSession.mockResolvedValue(
-			aSession({ secret: "new-secret", userId: "user-7" }),
-		);
-		test.adminUsers.delete.mockResolvedValue({} as never);
-		test.userAccount.get.mockResolvedValue(aUser({ $id: "user-7" }));
-		const onGuestMerge = vi
-			.spyOn(serverHooks, "onGuestMerge")
-			.mockResolvedValue(undefined);
-		return { ...test, guest, onGuestMerge };
+	async function arrange() {
+		const test = createTestContext();
+		const { user } = await test.seedUser({ ...credentials, signIn: false });
+		const { user: guest, session: guestSession } = await test.seedGuest();
+		const onGuestMerge = vi.spyOn(serverHooks, "onGuestMerge");
+		return { ...test, user, guest, guestSession, onGuestMerge };
 	}
 
-	afterEach(() => vi.restoreAllMocks());
-
 	it("validates credentials, runs the hook, deletes the guest, then swaps the cookie", async () => {
-		const { context, adminUsers, adminAccount, sessionCookie, onGuestMerge } =
-			arrange();
+		const test = await arrange();
+		await test.context.data.todos.create(test.guest.id, { title: "mine" });
 
 		const user = await signInAndMergeGuestHandler({
 			data: credentials,
-			context,
+			context: test.context,
 		});
 
-		expect(user.$id).toBe("user-7");
-		expect(onGuestMerge).toHaveBeenCalledWith({
-			guestUserId: "guest-1",
-			userId: "user-7",
-			admin: context.appwrite.admin(),
+		expect(user.id).toBe(test.user.id);
+		expect(test.onGuestMerge).toHaveBeenCalledWith({
+			guestUserId: test.guest.id,
+			userId: test.user.id,
+			data: test.context.data,
 		});
-		expect(adminUsers.delete).toHaveBeenCalledWith({ userId: "guest-1" });
+		expect(test.admin.deleteUser).toHaveBeenCalledWith(test.guest.id);
 		const order = [
-			adminAccount.createEmailPasswordSession.mock.invocationCallOrder[0],
-			onGuestMerge.mock.invocationCallOrder[0],
-			adminUsers.delete.mock.invocationCallOrder[0],
+			test.auth.signIn.mock.invocationCallOrder[0],
+			test.onGuestMerge.mock.invocationCallOrder[0],
+			test.admin.deleteUser.mock.invocationCallOrder[0],
 		];
 		expect(order).toEqual([...order].sort((a, b) => (a ?? 0) - (b ?? 0)));
-		expect(sessionCookie.value).toBe("new-secret");
+		expect(test.sessionCookie.value).not.toBe(test.guestSession.token);
+		await expect(test.context.getUser()).resolves.toBeTruthy();
+		// The default hook moves the example table's rows.
+		const { items } = await test.context.data.todos.list(test.user.id);
+		expect(items.map((todo) => todo.title)).toEqual(["mine"]);
 	});
 
 	it("rejects INVALID_CREDENTIALS without running the hook or deleting the guest", async () => {
-		const { context, adminAccount, adminUsers, onGuestMerge, sessionCookie } =
-			arrange();
-		adminAccount.createEmailPasswordSession.mockRejectedValue(
-			appwriteError("user_invalid_credentials", 401),
-		);
+		const test = await arrange();
 		await expect(
 			throughMiddleware(
-				signInAndMergeGuestHandler({ data: credentials, context }),
+				signInAndMergeGuestHandler({
+					data: { ...credentials, password: "wrong-password" },
+					context: test.context,
+				}),
 			),
 		).rejects.toEqual(new AppError("INVALID_CREDENTIALS"));
-		expect(onGuestMerge).not.toHaveBeenCalled();
-		expect(adminUsers.delete).not.toHaveBeenCalled();
-		expect(sessionCookie.value).toBe("guest-secret");
+		expect(test.onGuestMerge).not.toHaveBeenCalled();
+		expect(test.admin.deleteUser).not.toHaveBeenCalled();
+		expect(test.sessionCookie.value).toBe(test.guestSession.token);
 	});
 
 	it("keeps the guest and the cookie, and deletes the unused session, when the hook rejects", async () => {
-		const { context, adminUsers, onGuestMerge, sessionCookie } = arrange();
-		adminUsers.deleteSession.mockResolvedValue({} as never);
-		onGuestMerge.mockRejectedValue(new Error("merge failed"));
+		const test = await arrange();
+		test.onGuestMerge.mockRejectedValueOnce(new Error("merge failed"));
 		await expect(
 			throughMiddleware(
-				signInAndMergeGuestHandler({ data: credentials, context }),
+				signInAndMergeGuestHandler({
+					data: credentials,
+					context: test.context,
+				}),
 			),
 		).rejects.toEqual(new AppError("UNKNOWN"));
-		expect(adminUsers.delete).not.toHaveBeenCalled();
-		expect(adminUsers.deleteSession).toHaveBeenCalledWith({
-			userId: "user-7",
-			sessionId: aSession().$id,
+		expect(test.admin.deleteUser).not.toHaveBeenCalled();
+		const created = await test.auth.signIn.mock.results[0]?.value;
+		expect(test.admin.deleteSession).toHaveBeenCalledWith({
+			userId: test.user.id,
+			sessionId: created.id,
 		});
-		expect(sessionCookie.value).toBe("guest-secret");
+		expect(test.sessionCookie.value).toBe(test.guestSession.token);
 	});
 
 	it("deletes the unused session when deleting the guest fails, and still reports the original error", async () => {
-		const { context, adminUsers, sessionCookie } = arrange();
+		const test = await arrange();
 		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-		adminUsers.delete.mockRejectedValue(new Error("delete failed"));
-		adminUsers.deleteSession.mockRejectedValue(new Error("cleanup failed"));
+		test.admin.deleteUser.mockRejectedValueOnce(new Error("delete failed"));
+		test.admin.deleteSession.mockRejectedValueOnce(new Error("cleanup"));
 		await expect(
 			throughMiddleware(
-				signInAndMergeGuestHandler({ data: credentials, context }),
+				signInAndMergeGuestHandler({
+					data: credentials,
+					context: test.context,
+				}),
 			),
 		).rejects.toEqual(new AppError("UNKNOWN"));
-		expect(adminUsers.deleteSession).toHaveBeenCalledOnce();
+		expect(test.admin.deleteSession).toHaveBeenCalledOnce();
 		expect(warn).toHaveBeenCalled();
-		expect(sessionCookie.value).toBe("guest-secret");
-		warn.mockRestore();
+		expect(test.sessionCookie.value).toBe(test.guestSession.token);
 	});
 
 	it("rejects FORBIDDEN for a non-guest and UNAUTHENTICATED when signed out", async () => {
-		const signedIn = createTestContext({ user: aUser() });
+		const signedIn = createTestContext();
+		await signedIn.seedUser();
 		await expect(
 			throughMiddleware(
 				signInAndMergeGuestHandler({
@@ -591,9 +483,7 @@ describe("signInAndMergeGuestHandler", () => {
 				}),
 			),
 		).rejects.toEqual(new AppError("FORBIDDEN"));
-		expect(
-			signedIn.adminAccount.createEmailPasswordSession,
-		).not.toHaveBeenCalled();
+		expect(signedIn.auth.signIn).not.toHaveBeenCalled();
 
 		const signedOut = createTestContext();
 		await expect(
@@ -606,199 +496,225 @@ describe("signInAndMergeGuestHandler", () => {
 		).rejects.toEqual(new AppError("UNAUTHENTICATED"));
 	});
 
-	it("rate-limits like sign-in before any Appwrite call", async () => {
-		const { context, adminAccount, rateLimit } = arrange();
-		rateLimit.mockImplementation(() => {
-			throw new AppError("RATE_LIMITED");
-		});
+	it("rate-limits like sign-in before any backend call", async () => {
+		const test = await arrange();
+		test.rateLimit.mockImplementation(rateLimited);
 		await expect(
 			throughMiddleware(
-				signInAndMergeGuestHandler({ data: credentials, context }),
+				signInAndMergeGuestHandler({
+					data: credentials,
+					context: test.context,
+				}),
 			),
 		).rejects.toEqual(new AppError("RATE_LIMITED"));
-		expect(adminAccount.createEmailPasswordSession).not.toHaveBeenCalled();
+		expect(test.auth.signIn).not.toHaveBeenCalled();
 	});
 });
 
 describe("requestPasswordResetHandler", () => {
-	it("rate-limits by ip, then by ip and email, then creates a recovery to /reset-password", async () => {
-		const { context, adminAccount, rateLimit } = createTestContext();
-		adminAccount.createRecovery.mockResolvedValue({} as never);
+	it("rate-limits by ip, then by ip and email, then emails a link to /reset-password", async () => {
+		const test = createTestContext();
+		await test.seedUser({ ...credentials, signIn: false });
 
 		await expect(
-			requestPasswordResetHandler({ data: { email: "a@b.test" }, context }),
+			requestPasswordResetHandler({
+				data: { email: credentials.email },
+				context: test.context,
+			}),
 		).resolves.toEqual({ ok: true });
 
-		expect(rateLimit).toHaveBeenNthCalledWith(
+		expect(test.rateLimit).toHaveBeenNthCalledWith(
 			1,
 			"passwordResetIp",
 			"203.0.113.1",
 		);
-		expect(rateLimit).toHaveBeenNthCalledWith(
+		expect(test.rateLimit).toHaveBeenNthCalledWith(
 			2,
 			"passwordReset",
-			"203.0.113.1|a@b.test",
+			`203.0.113.1|${credentials.email}`,
 		);
-		expect(adminAccount.createRecovery).toHaveBeenCalledWith({
-			email: "a@b.test",
-			url: "http://app.test/reset-password",
+		expect(test.auth.requestPasswordReset).toHaveBeenCalledWith({
+			email: credentials.email,
+			redirectUrl: "http://app.test/reset-password",
 		});
+		expect(test.emails).toHaveLength(1);
 	});
 
 	it("keeps a sub-path of APP_URL in the link", async () => {
-		const { context, adminAccount } = createTestContext({
-			appUrl: "https://example.test/app",
+		const test = createTestContext({ appUrl: "https://example.test/app" });
+		await requestPasswordResetHandler({
+			data: { email: "a@b.test" },
+			context: test.context,
 		});
-		adminAccount.createRecovery.mockResolvedValue({} as never);
-		await requestPasswordResetHandler({ data: { email: "a@b.test" }, context });
-		expect(adminAccount.createRecovery).toHaveBeenCalledWith({
+		expect(test.auth.requestPasswordReset).toHaveBeenCalledWith({
 			email: "a@b.test",
-			url: "https://example.test/app/reset-password",
+			redirectUrl: "https://example.test/app/reset-password",
 		});
 	});
 
 	it("does not reveal unknown emails", async () => {
-		const { context, adminAccount } = createTestContext();
-		adminAccount.createRecovery.mockRejectedValue(
-			appwriteError("user_not_found", 404),
-		);
+		const test = createTestContext();
 		await expect(
-			requestPasswordResetHandler({ data: { email: "x@b.test" }, context }),
+			requestPasswordResetHandler({
+				data: { email: "nobody@b.test" },
+				context: test.context,
+			}),
 		).resolves.toEqual({ ok: true });
+		expect(test.emails).toEqual([]);
 	});
 
 	it("still answers ok when sending fails for an existing email, and logs it", async () => {
 		const log = vi.spyOn(console, "error").mockImplementation(() => {});
-		const { context, adminAccount } = createTestContext();
-		const failure = appwriteError("general_smtp_disabled", 503);
-		adminAccount.createRecovery.mockRejectedValue(failure);
+		const test = createTestContext();
+		const failure = new AppError("UNKNOWN");
+		test.auth.requestPasswordReset.mockRejectedValueOnce(failure);
 		await expect(
-			requestPasswordResetHandler({ data: { email: "a@b.test" }, context }),
+			requestPasswordResetHandler({
+				data: { email: "a@b.test" },
+				context: test.context,
+			}),
 		).resolves.toEqual({ ok: true });
 		expect(log).toHaveBeenCalledWith(expect.any(String), failure);
-		log.mockRestore();
 	});
 
-	it("surfaces Appwrite's own rate limit", async () => {
-		const { context, adminAccount } = createTestContext();
-		adminAccount.createRecovery.mockRejectedValue(
-			appwriteError("general_rate_limit_exceeded", 429),
+	it("surfaces the backend's own rate limit", async () => {
+		const test = createTestContext();
+		test.auth.requestPasswordReset.mockRejectedValueOnce(
+			new AppError("RATE_LIMITED"),
 		);
 		await expect(
 			throughMiddleware(
-				requestPasswordResetHandler({ data: { email: "a@b.test" }, context }),
+				requestPasswordResetHandler({
+					data: { email: "a@b.test" },
+					context: test.context,
+				}),
 			),
 		).rejects.toEqual(new AppError("RATE_LIMITED"));
 	});
 
-	it("does not call Appwrite when rate limited", async () => {
-		const { context, adminAccount, rateLimit } = createTestContext();
-		rateLimit.mockImplementation(() => {
-			throw new AppError("RATE_LIMITED");
-		});
+	it("does not call the backend when rate limited", async () => {
+		const test = createTestContext();
+		test.rateLimit.mockImplementation(rateLimited);
 		await expect(
 			throughMiddleware(
-				requestPasswordResetHandler({ data: { email: "a@b.test" }, context }),
+				requestPasswordResetHandler({
+					data: { email: "a@b.test" },
+					context: test.context,
+				}),
 			),
 		).rejects.toEqual(new AppError("RATE_LIMITED"));
-		expect(adminAccount.createRecovery).not.toHaveBeenCalled();
+		expect(test.auth.requestPasswordReset).not.toHaveBeenCalled();
 	});
 });
 
 describe("resetPasswordHandler", () => {
-	const data = { userId: "u1", secret: "sec", password: "new-password" };
-
-	it("completes the recovery with the admin client", async () => {
-		const { context, adminAccount } = createTestContext();
-		adminAccount.updateRecovery.mockResolvedValue({} as never);
-		await expect(resetPasswordHandler({ data, context })).resolves.toEqual({
-			ok: true,
+	it("sets the new password from the emailed link", async () => {
+		const test = createTestContext();
+		await test.seedUser({ ...credentials, signIn: false });
+		await requestPasswordResetHandler({
+			data: { email: credentials.email },
+			context: test.context,
 		});
-		expect(adminAccount.updateRecovery).toHaveBeenCalledWith(data);
+		const link = test.lastLink("recovery");
+		await expect(
+			resetPasswordHandler({
+				data: { link, password: "new-password" },
+				context: test.context,
+			}),
+		).resolves.toEqual({ ok: true });
+		await expect(
+			signInHandler({
+				data: { ...credentials, password: "new-password" },
+				context: test.context,
+			}),
+		).resolves.toMatchObject({ email: credentials.email });
 	});
 
-	it("maps an expired or invalid link to INVALID_TOKEN", async () => {
-		const { context, adminAccount } = createTestContext();
-		adminAccount.updateRecovery.mockRejectedValue(
-			appwriteError("user_invalid_token", 401),
-		);
+	it("rejects an expired or invalid link as INVALID_TOKEN", async () => {
+		const { context } = createTestContext();
 		await expect(
-			throughMiddleware(resetPasswordHandler({ data, context })),
+			throughMiddleware(
+				resetPasswordHandler({
+					data: { link: { token: "made-up" }, password: "new-password" },
+					context,
+				}),
+			),
 		).rejects.toEqual(new AppError("INVALID_TOKEN"));
 	});
 });
 
 describe("sendVerificationHandler", () => {
-	it("sends the verification email linking to /verify-email", async () => {
-		const { context, userAccount } = createTestContext({ user: aUser() });
-		userAccount.createVerification.mockResolvedValue({} as never);
-		await expect(sendVerificationHandler({ context })).resolves.toEqual({
-			ok: true,
-		});
-		expect(userAccount.createVerification).toHaveBeenCalledWith({
-			url: "http://app.test/verify-email",
-		});
+	it("emails a verification link to /verify-email", async () => {
+		const test = createTestContext();
+		await test.seedUser({ verified: false });
+		await expect(
+			sendVerificationHandler({ context: test.context }),
+		).resolves.toEqual({ ok: true });
+		expect(test.emails).toEqual([
+			expect.objectContaining({
+				purpose: "verification",
+				url: expect.stringMatching(/^http:\/\/app\.test\/verify-email\?/),
+			}),
+		]);
 	});
 
 	it("is FORBIDDEN for a guest", async () => {
-		const { context, userAccount } = createTestContext({ user: aGuest() });
+		const test = createTestContext();
+		await test.seedGuest();
 		await expect(
-			throughMiddleware(sendVerificationHandler({ context })),
+			throughMiddleware(sendVerificationHandler({ context: test.context })),
 		).rejects.toEqual(new AppError("FORBIDDEN"));
-		expect(userAccount.createVerification).not.toHaveBeenCalled();
+		expect(test.session.sendVerification).not.toHaveBeenCalled();
 	});
 
 	it("is UNAUTHENTICATED when signed out", async () => {
-		const { context } = createTestContext({ user: null });
+		const { context } = createTestContext();
 		await expect(
 			throughMiddleware(sendVerificationHandler({ context })),
 		).rejects.toEqual(new AppError("UNAUTHENTICATED"));
 	});
 
-	it("maps Appwrite failures", async () => {
-		const { context, userAccount } = createTestContext({ user: aUser() });
-		userAccount.createVerification.mockRejectedValue(
-			appwriteError("general_rate_limit_exceeded", 429),
+	it("surfaces backend failures", async () => {
+		const test = createTestContext();
+		await test.seedUser({ verified: false });
+		test.session.sendVerification.mockRejectedValueOnce(
+			new AppError("RATE_LIMITED"),
 		);
 		await expect(
-			throughMiddleware(sendVerificationHandler({ context })),
+			throughMiddleware(sendVerificationHandler({ context: test.context })),
 		).rejects.toEqual(new AppError("RATE_LIMITED"));
 	});
 });
 
 describe("confirmVerificationHandler", () => {
-	const data = { userId: "u1", secret: "sec" };
-
-	it("confirms as nobody: Appwrite refuses an API key here, and the link may be opened signed out", async () => {
-		const { context, anonymousAccount, adminAccount } = createTestContext({
-			user: null,
-		});
-		anonymousAccount.updateVerification.mockResolvedValue({} as never);
+	it("confirms the email from its link, signed out too", async () => {
+		const test = createTestContext();
+		const { session } = await test.seedUser({ verified: false });
+		await sendVerificationHandler({ context: test.context });
+		const link = test.lastLink("verification");
+		test.sessionCookie.value = undefined;
 		await expect(
-			confirmVerificationHandler({ data, context }),
+			confirmVerificationHandler({ data: { link }, context: test.context }),
 		).resolves.toEqual({ ok: true });
-		expect(anonymousAccount.updateVerification).toHaveBeenCalledWith(data);
-		expect(adminAccount.updateVerification).not.toHaveBeenCalled();
+		expect(test.auth.confirmVerification).toHaveBeenCalledWith(link);
+		await expect(
+			test.backend
+				.auth({ userAgent: undefined })
+				.session(session.token)
+				.getUser(),
+		).resolves.toMatchObject({ emailVerified: true });
 	});
 
-	it("maps an invalid link to INVALID_TOKEN", async () => {
-		const { context, anonymousAccount } = createTestContext();
-		anonymousAccount.updateVerification.mockRejectedValue(
-			appwriteError("user_invalid_token", 401),
-		);
+	it("rejects an invalid link as INVALID_TOKEN", async () => {
+		const { context } = createTestContext();
 		await expect(
-			throughMiddleware(confirmVerificationHandler({ data, context })),
+			throughMiddleware(
+				confirmVerificationHandler({
+					data: { link: { token: "made-up" } },
+					context,
+				}),
+			),
 		).rejects.toEqual(new AppError("INVALID_TOKEN"));
-	});
-
-	it("maps a link for an unknown user to NOT_FOUND", async () => {
-		const { context, anonymousAccount } = createTestContext();
-		anonymousAccount.updateVerification.mockRejectedValue(
-			appwriteError("user_not_found", 404),
-		);
-		await expect(
-			throughMiddleware(confirmVerificationHandler({ data, context })),
-		).rejects.toEqual(new AppError("NOT_FOUND"));
 	});
 });
 
@@ -806,71 +722,79 @@ describe("preferences of a new or signed-in user (R39)", () => {
 	const browsing = { locale: "it", theme: "dark" } as const;
 	const stored = { ...DEFAULT_PREFS, locale: "it", theme: "light" } as const;
 
-	/** Every Appwrite call the five sign-in paths make, answering `user`. */
-	function arrange(user = aUser({ prefs: { ...stored } })) {
-		const test = createTestContext({
-			user: aGuest(),
-			sessionSecret: "guest-secret",
-			browserPrefs: browsing,
-		});
-		test.adminAccount.create.mockResolvedValue(user);
-		test.adminAccount.createEmailPasswordSession.mockResolvedValue(aSession());
-		test.adminAccount.createAnonymousSession.mockResolvedValue(aGuestSession());
-		test.adminUsers.delete.mockResolvedValue({} as never);
-		test.userAccount.updatePrefs.mockResolvedValue(user);
-		test.userAccount.updateEmail.mockResolvedValue(user);
-		test.userAccount.updateName.mockResolvedValue(user);
-		test.userAccount.deleteSession.mockResolvedValue({} as never);
-		test.userAccount.createVerification.mockResolvedValue({} as never);
-		test.userAccount.get.mockResolvedValue(user);
+	/** A guest signed in, and Ann's account with `prefs`, for the five sign-in paths. */
+	async function arrange(prefs: Partial<typeof stored> = stored) {
+		const test = createTestContext({ browserPrefs: browsing });
+		await test.seedUser({ ...credentials, prefs, signIn: false });
+		await test.seedGuest({ prefs });
 		vi.spyOn(serverHooks, "onGuestMerge").mockResolvedValue(undefined);
 		return test;
 	}
 
-	afterEach(() => vi.restoreAllMocks());
-
-	const signUpData = { name: "Ann", ...credentials };
 	const paths = {
 		signIn: (context: ServerContext) =>
 			signInHandler({ data: credentials, context }),
 		signUp: (context: ServerContext) =>
-			signUpHandler({ data: signUpData, context }),
+			signUpHandler({
+				data: { ...signUpData, email: "new@example.test" },
+				context,
+			}),
 		startGuest: (context: ServerContext) =>
 			startGuestSessionHandler({ context }),
 		upgrade: (context: ServerContext) =>
-			upgradeGuestHandler({ data: signUpData, context }),
+			upgradeGuestHandler({
+				data: { ...signUpData, email: "new@example.test" },
+				context,
+			}),
 		merge: (context: ServerContext) =>
 			signInAndMergeGuestHandler({ data: credentials, context }),
 	};
 
 	it.each(
 		Object.entries(paths),
-	)("%s writes both preference cookies from the account", async (_, run) => {
-		const { context, preferenceCookies } = arrange();
-		await run(context);
-		expect(preferenceCookies.locale).toBe("it");
-		expect(preferenceCookies.theme).toBe("light");
+	)("%s writes both preference cookies from the account", async (name, run) => {
+		const test = await arrange();
+		// New accounts start with the browser's; make them hold the stored ones.
+		if (name === "signUp" || name === "startGuest") {
+			test.session.updatePrefs.mockImplementationOnce(async (token: string) =>
+				test.backend
+					.auth({ userAgent: undefined })
+					.session(token)
+					.updatePrefs(stored),
+			);
+		}
+		await run(test.context);
+		expect(test.preferenceCookies.locale).toBe("it");
+		expect(test.preferenceCookies.theme).toBe("light");
 	});
 
 	it.each(
 		Object.entries(paths),
-	)("%s keeps the browser's cookies when the account has no preference", async (_, run) => {
-		const { context, preferenceCookies } = arrange(
-			aUser({ prefs: {} as never }),
-		);
-		await run(context);
-		expect(preferenceCookies.locale).toBeUndefined();
-		expect(preferenceCookies.theme).toBeUndefined();
+	)("%s keeps the browser's cookies when the account has no preference", async (name, run) => {
+		const test = await arrange({});
+		if (name === "signUp" || name === "startGuest") {
+			test.session.updatePrefs.mockResolvedValueOnce({});
+		}
+		await run(test.context);
+		expect(test.preferenceCookies.locale).toBeUndefined();
+		expect(test.preferenceCookies.theme).toBeUndefined();
 	});
 
 	it.each([
 		["signUp", paths.signUp],
 		["startGuest", paths.startGuest],
 	])("%s seeds the account with the language and theme being browsed", async (_, run) => {
-		const { context, userAccount } = arrange();
-		await run(context);
-		expect(userAccount.updatePrefs).toHaveBeenCalledWith({
-			prefs: { onboardingCompleted: false, locale: "it", theme: "dark" },
+		const test = await arrange();
+		const user = await run(test.context);
+		expect(test.session.updatePrefs).toHaveBeenCalledWith(expect.any(String), {
+			onboardingCompleted: false,
+			locale: "it",
+			theme: "dark",
+		});
+		expect(user.prefs).toEqual({
+			onboardingCompleted: false,
+			locale: "it",
+			theme: "dark",
 		});
 	});
 });

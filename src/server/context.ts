@@ -1,10 +1,7 @@
-import type {
-	AppClient,
-	AppPrefs,
-	AppUser,
-	Locale,
-	ThemePreference,
-} from "#/lib/appwrite/app-models";
+import type { AuthService, SessionAuth } from "#/core/auth/ports";
+import type { AuthSession, User } from "#/core/auth/types";
+import type { AppData } from "#/core/backend";
+import type { AppPrefs, Locale, ThemePreference } from "#/core/prefs";
 
 /** Rate-limited actions; each has its own window and limit. */
 export type RateLimitBucket =
@@ -18,7 +15,7 @@ export type RateLimitBucket =
 /** The session cookie of the current request. Only `session-cookie.server.ts` knows its name and attributes. */
 export type SessionCookie = {
 	read(): string | undefined;
-	write(session: { secret: string; expire: string }): void;
+	write(session: Pick<AuthSession, "token" | "expiresAt">): void;
 	clear(): void;
 };
 
@@ -36,18 +33,14 @@ export type PreferenceCookies = {
 
 /** Everything a server-function handler may touch. Built per request by the auth middleware. */
 export type ServerContext = {
-	appwrite: {
-		/** Acts as the signed-in user. Throws `AppError("UNAUTHENTICATED")` without a session. */
-		user(): AppClient<"server">;
-		/** Acts as the holder of `secret`, e.g. a session created during this request. */
-		forSession(secret: string): AppClient<"server">;
-		/** Acts with the API key, bypassing permissions; forwards `userAgent` (sessions it creates show the visitor's browser). */
-		admin(): AppClient<"admin">;
-		/** Acts as nobody (no key, no session), where Appwrite refuses an API key. */
-		anonymous(): AppClient<"server">;
-	};
+	/** The backend's auth operations, for this request. */
+	auth: AuthService;
+	/** Acts as the request's session. Throws `AppError("UNAUTHENTICATED")` without a session cookie. */
+	session(): SessionAuth;
+	/** The backend's repositories. They check ownership, not the session: pass the user's id. */
+	data: AppData;
 	/** The signed-in user, or `null`. Memoized per request. */
-	getUser(): Promise<AppUser | null>;
+	getUser(): Promise<User | null>;
 	sessionCookie: SessionCookie;
 	preferenceCookies: PreferenceCookies;
 	/**

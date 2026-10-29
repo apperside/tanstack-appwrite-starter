@@ -9,7 +9,7 @@ export const emailSchema = z.pipe(
 export const passwordSchema = z
 	.string()
 	.check(z.minLength(8), z.maxLength(256));
-/** The longest display name Appwrite accepts. */
+/** The longest display name Appwrite accepts (the strictest backend so far). */
 export const NAME_MAX_LENGTH = 128;
 export const nameSchema = z
 	.string()
@@ -25,18 +25,28 @@ export const signUpSchema = z.object({
 	password: passwordSchema,
 });
 
-const tokenSchema = z.string().check(z.minLength(1));
+/**
+ * An emailed link's credential: its query parameters, whichever the backend
+ * uses (`EmailLinkParams`). Bounded, as it comes from the client.
+ */
+const linkParamsSchema = z
+	.record(
+		z.string().check(z.minLength(1), z.maxLength(64)),
+		z.string().check(z.minLength(1), z.maxLength(2048)),
+	)
+	.check(
+		z.refine((link) => {
+			const size = Object.keys(link).length;
+			return size >= 1 && size <= 8;
+		}),
+	);
 
 export const requestResetSchema = z.object({ email: emailSchema });
 export const resetPasswordSchema = z.object({
-	userId: tokenSchema,
-	secret: tokenSchema,
+	link: linkParamsSchema,
 	password: passwordSchema,
 });
-export const confirmVerificationSchema = z.object({
-	userId: tokenSchema,
-	secret: tokenSchema,
-});
+export const confirmVerificationSchema = z.object({ link: linkParamsSchema });
 
 /**
  * A flag in a page URL, `?name=1`. The router parses search values as JSON, so
@@ -53,22 +63,29 @@ export const loginSearchSchema = z.object({
 /** `/signup`: `upgrade=1` for a guest saving their account. */
 export const signupSearchSchema = z.object({ upgrade: flagSchema });
 
-/** A link credential: the router reads an all-digits value as a number. */
-const linkTokenSchema = z.catch(
-	z.optional(
-		z.pipe(
-			z.pipe(z.union([z.string(), z.number()]), z.transform(String)),
-			tokenSchema,
+/**
+ * `/reset-password`, `/verify-email`: an emailed link's parameters, passed to
+ * the backend as they are (it knows which carry the credential). The router
+ * reads an all-digits value as a number; other non-strings and empty values
+ * are dropped.
+ */
+export const emailLinkSearchSchema = z.catch(
+	z.pipe(
+		z.record(z.string(), z.unknown()),
+		z.transform(
+			(search): Record<string, string> =>
+				Object.fromEntries(
+					Object.entries(search).flatMap(([key, value]) =>
+						(typeof value === "string" && value !== "") ||
+						typeof value === "number"
+							? [[key, String(value)]]
+							: [],
+					),
+				),
 		),
 	),
-	undefined,
+	{},
 );
-
-/** `/reset-password`, `/verify-email`: the credentials of an emailed link (absent when malformed). */
-export const emailLinkSearchSchema = z.object({
-	userId: linkTokenSchema,
-	secret: linkTokenSchema,
-});
 
 export type SignInInput = z.output<typeof signInSchema>;
 export type SignUpInput = z.output<typeof signUpSchema>;

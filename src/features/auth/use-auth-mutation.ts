@@ -5,7 +5,7 @@ import {
 	useMutation,
 	useQueryClient,
 } from "tanstack-query-typed";
-import type { AppUser } from "#/lib/appwrite/app-models";
+import type { User } from "#/core/auth/types";
 import { currentUserQuery } from "./auth.queries";
 
 /**
@@ -19,7 +19,7 @@ export type AuthMutationDefinition<
 	TError = Error,
 	TContext = unknown,
 > = AppMutationDefinition<K, TData, TError, TContext> & {
-	nextUser?: AppUser | null | ((data: TData) => AppUser | null);
+	nextUser?: User | null | ((data: TData) => User | null);
 };
 
 /**
@@ -41,9 +41,7 @@ export function useAuthMutation<
 	const router = useRouter();
 
 	/** The user after the mutation, or `undefined` if it could not be read. */
-	async function readNextUser(
-		data: TData,
-	): Promise<AppUser | null | undefined> {
+	async function readNextUser(data: TData): Promise<User | null | undefined> {
 		if (typeof nextUser === "function") return nextUser(data);
 		if (nextUser !== undefined) return nextUser;
 		try {
@@ -70,7 +68,7 @@ export function useAuthMutation<
 				queryClient.removeQueries();
 			} else {
 				queryClient.setQueryData(currentUserQuery.queryKey, next);
-				if (previous?.$id !== next?.$id) {
+				if (previous?.id !== next?.id) {
 					// Another account's data must never outlive the switch.
 					queryClient.removeQueries({
 						predicate: (query) => query.queryKey[0] !== "currentUser",

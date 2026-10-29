@@ -1,7 +1,7 @@
 import { screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { User } from "#/core/auth/types";
 import { getCurrentUser } from "#/features/auth/auth.functions";
-import type { AppUser } from "#/lib/appwrite/app-models";
 import { AppError } from "#/lib/errors";
 import { aGuest, aUser } from "#/test/fixtures";
 import { renderWithRouter } from "#/test/router";
@@ -23,7 +23,7 @@ function Probe({
 }: {
 	mutationFn: () => Promise<void>;
 	onSuccess?: () => void;
-	nextUser?: AppUser | null;
+	nextUser?: User | null;
 }) {
 	const user = useCurrentUser();
 	const mutation = useAuthMutation({
@@ -34,7 +34,7 @@ function Probe({
 	});
 	return (
 		<>
-			<p>{user ? `user:${user.$id}` : "signed out"}</p>
+			<p>{user ? `user:${user.id}` : "signed out"}</p>
 			{mutation.isError && <p role="alert">{mutation.error.message}</p>}
 			<button type="button" onClick={() => mutation.mutate()}>
 				Run
@@ -43,7 +43,7 @@ function Probe({
 	);
 }
 
-function respondWith(user: AppUser | null) {
+function respondWith(user: User | null) {
 	fetchUser.mockResolvedValue(
 		user as Awaited<ReturnType<typeof getCurrentUser>>,
 	);
@@ -100,7 +100,7 @@ describe("useAuthMutation", () => {
 			{ user: aUser() },
 		);
 		queryClient.setQueryData(["sessions"], []);
-		respondWith(aUser({ $id: "user-2" }));
+		respondWith(aUser({ id: "user-2" }));
 
 		await user.click(screen.getByRole("button", { name: "Run" }));
 		expect(await screen.findByText("user:user-2")).toBeInTheDocument();
@@ -113,7 +113,7 @@ describe("useAuthMutation", () => {
 			{ user: aGuest() },
 		);
 		queryClient.setQueryData(["sessions"], []);
-		// A guest upgrade keeps the same $id.
+		// A guest upgrade keeps the same id.
 		respondWith(aGuest({ email: "ada@example.test" }));
 
 		await user.click(screen.getByRole("button", { name: "Run" }));
@@ -159,11 +159,11 @@ describe("useAuthMutation", () => {
 			const mutation = useAuthMutation({
 				...signOutMutation,
 				mutationFn: async () => {},
-				nextUser: () => aUser({ $id: "user-9" }),
+				nextUser: () => aUser({ id: "user-9" }),
 			});
 			return (
 				<>
-					<p>{current ? `user:${current.$id}` : "signed out"}</p>
+					<p>{current ? `user:${current.id}` : "signed out"}</p>
 					<button type="button" onClick={() => mutation.mutate()}>
 						Run
 					</button>

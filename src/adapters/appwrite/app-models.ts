@@ -5,28 +5,6 @@ import type { Todos } from "./generated/appwrite";
 /** The generated schema's enums. @public */
 export { TodosPriority } from "./generated/appwrite";
 
-export type Locale = "en" | "it";
-
-export type ThemePreference = "light" | "dark" | "system";
-
-/**
- * User preferences stored in the Appwrite account prefs.
- * An interface so apps can extend it by declaration merging.
- */
-export interface AppPrefs {
-	onboardingCompleted: boolean;
-	locale: Locale;
-	theme: ThemePreference;
-}
-
-export const DEFAULT_PREFS: AppPrefs = {
-	onboardingCompleted: false,
-	locale: "en",
-	theme: "system",
-};
-
-export type AppUser = Models.User<AppPrefs & Models.Preferences>;
-
 type Omitable = "$collectionId" | "$tableId" | "$databaseId" | keyof Models.Row;
 
 /** Maps string enums to their literal unions so `"normal"` and `TodosPriority.NORMAL` both fit. */

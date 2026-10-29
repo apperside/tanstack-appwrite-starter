@@ -13,7 +13,7 @@ export const Route = createFileRoute("/verify-email")({
 		if (cause === "stay") return;
 		const href = resolveVerifyEmailRedirect({
 			user: context.user,
-			hasLink: Boolean(search.userId && search.secret),
+			hasLink: Object.keys(search).length > 0,
 		});
 		if (href) throw redirect({ href });
 	},
@@ -22,6 +22,5 @@ export const Route = createFileRoute("/verify-email")({
 });
 
 function VerifyEmail() {
-	const { userId, secret } = Route.useSearch();
-	return <VerifyEmailPage userId={userId} secret={secret} />;
+	return <VerifyEmailPage link={Route.useSearch()} />;
 }

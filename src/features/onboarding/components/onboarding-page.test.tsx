@@ -1,9 +1,9 @@
 import { screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { axe } from "vitest-axe";
+import { DEFAULT_PREFS } from "#/core/prefs";
 import { getCurrentUser } from "#/features/auth/auth.functions";
 import { completeOnboarding } from "#/features/onboarding/onboarding.functions";
-import { DEFAULT_PREFS } from "#/lib/appwrite/app-models";
 import { AppError } from "#/lib/errors";
 import { aGuest, aUser } from "#/test/fixtures";
 import { renderWithRouter } from "#/test/router";

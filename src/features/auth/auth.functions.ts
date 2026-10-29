@@ -9,20 +9,12 @@ import {
 } from "./auth.schemas";
 
 // The handlers live in a `*.server.ts` module that is imported dynamically, so
-// neither they nor the SDKs they use are reachable from the client bundle.
+// neither they nor the backend adapters they use are reachable from the client bundle.
 /* v8 ignore start -- thin createServerFn wiring: the compiler needs inline handlers, logic is tested via the handlers in auth.handlers.server.ts; delegation only — no logic between these markers */
 export const getCurrentUser = createServerFn({ method: "GET" })
 	.middleware([authMiddleware])
 	.handler(async ({ context }) =>
 		(await import("./auth.handlers.server")).getCurrentUserHandler({ context }),
-	);
-
-export const issueBrowserJwt = createServerFn({ method: "POST" })
-	.middleware([authMiddleware])
-	.handler(async ({ context }) =>
-		(await import("./auth.handlers.server")).issueBrowserJwtHandler({
-			context,
-		}),
 	);
 
 /** Consumed by the sign-in form. */

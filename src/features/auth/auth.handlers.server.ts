@@ -1,5 +1,4 @@
-import { ID } from "appwrite";
-import type { AppUser } from "#/lib/appwrite/app-models";
+import type { AuthSession, User } from "#/core/auth/types";
 import { AppError, toAppError } from "#/lib/errors";
 import { isGuest } from "#/lib/guards";
 import {
@@ -25,92 +24,73 @@ type NoInput = Pick<HandlerArgs<undefined>, "context">;
  */
 async function sessionUser(
 	context: ServerContext,
-	sessionSecret: string,
-): Promise<AppUser> {
-	const user = await context.appwrite
-		.forSession(sessionSecret)
-		.account.get<AppUser["prefs"]>();
+	session: AuthSession,
+): Promise<User> {
+	const user = await context.auth.session(session.token).getUser();
 	writePreferenceCookies(context, user.prefs);
 	return user;
+}
+
+/** Seeds a new account's prefs; a failure only logs, as readers fall back to the defaults. */
+async function seedNewAccountPrefs(context: ServerContext, token: string) {
+	try {
+		await context.auth.session(token).updatePrefs(seedPrefs(context));
+	} catch (error) {
+		console.warn("Could not save the default preferences", error);
+	}
+}
+
+/** Sends a verification email; a failure only logs, as the user can request another. */
+async function trySendVerification(context: ServerContext, token: string) {
+	try {
+		await context.auth
+			.session(token)
+			.sendVerification({ redirectUrl: context.appLink("/verify-email") });
+	} catch (error) {
+		console.warn("Could not send the verification email", error);
+	}
 }
 
 /** The signed-in user, or `null`. */
 export async function getCurrentUserHandler({
 	context,
-}: NoInput): Promise<AppUser | null> {
+}: NoInput): Promise<User | null> {
 	return context.getUser();
-}
-
-/** A short-lived JWT for the browser SDK (realtime), bound to the current session. */
-export async function issueBrowserJwtHandler({
-	context,
-}: NoInput): Promise<{ jwt: string }> {
-	const user = await requireUser(context);
-	const session = await context.appwrite
-		.user()
-		.account.getSession({ sessionId: "current" });
-	const { jwt } = await context.appwrite
-		.admin()
-		.users.createJWT({ userId: user.$id, sessionId: session.$id });
-	return { jwt };
 }
 
 /** Signs in with email and password, starts the session cookie and returns the user. */
 export async function signInHandler({
 	data,
 	context,
-}: HandlerArgs<SignInInput>): Promise<AppUser> {
+}: HandlerArgs<SignInInput>): Promise<User> {
 	const { email, password } = data;
 	context.rateLimit("signIn", context.clientIp);
 	context.rateLimit("signInEmail", `${context.clientIp}|${email}`);
-	const session = await context.appwrite
-		.admin()
-		.account.createEmailPasswordSession({ email, password });
+	const session = await context.auth.signIn({ email, password });
 	context.sessionCookie.write(session);
-	return sessionUser(context, session.secret);
+	return sessionUser(context, session);
 }
 
 /** Creates an account, signs it in and sends the verification email. */
 export async function signUpHandler({
 	data,
 	context,
-}: HandlerArgs<SignUpInput>): Promise<AppUser> {
-	const { name, email, password } = data;
+}: HandlerArgs<SignUpInput>): Promise<User> {
 	context.rateLimit("signUp", context.clientIp);
-	const { account } = context.appwrite.admin();
-	await account.create({ userId: ID.unique(), email, password, name });
-	const session = await account.createEmailPasswordSession({
-		email,
-		password,
-	});
+	const session = await context.auth.signUp(data);
 	context.sessionCookie.write(session);
-	const userAccount = context.appwrite.forSession(session.secret).account;
-	try {
-		await userAccount.updatePrefs({ prefs: seedPrefs(context) });
-	} catch (error) {
-		// Readers fall back to the defaults; signup itself succeeded.
-		console.warn("Could not save the default preferences", error);
-	}
-	try {
-		await userAccount.createVerification({
-			url: context.appLink("/verify-email"),
-		});
-	} catch (error) {
-		// The user can request another email later; signup itself succeeded.
-		console.warn("Could not send the verification email", error);
-	}
-	return sessionUser(context, session.secret);
+	await seedNewAccountPrefs(context, session.token);
+	await trySendVerification(context, session.token);
+	return sessionUser(context, session);
 }
 
 /**
- * Ends the current session. The cookie is cleared even when Appwrite rejects
- * (e.g. it already expired), and so is the guest banner's dismissal.
+ * Ends the current session. The cookie is cleared even when the backend
+ * rejects (e.g. it already expired), and so is the guest banner's dismissal.
  */
 export async function signOutHandler({ context }: NoInput): Promise<void> {
 	try {
-		await context.appwrite
-			.user()
-			.account.deleteSession({ sessionId: "current" });
+		await context.session().signOut();
 	} catch (error) {
 		console.warn("Could not delete the current session", error);
 	} finally {
@@ -127,7 +107,7 @@ export async function signOutEverywhereHandler({
 	context,
 }: NoInput): Promise<void> {
 	try {
-		await context.appwrite.user().account.deleteSessions();
+		await context.session().signOutEverywhere();
 	} catch (error) {
 		if (toAppError(error).code !== "UNAUTHENTICATED") throw error;
 	}
@@ -138,105 +118,66 @@ export async function signOutEverywhereHandler({
 /** Starts an anonymous session (a guest account) and returns the guest. */
 export async function startGuestSessionHandler({
 	context,
-}: NoInput): Promise<AppUser> {
+}: NoInput): Promise<User> {
 	context.rateLimit("guest", context.clientIp);
-	const session = await context.appwrite
-		.admin()
-		.account.createAnonymousSession();
+	const session = await context.auth.startGuest();
 	context.sessionCookie.write(session);
 	context.preferenceCookies.clearGuestBannerDismissed();
-	const { account } = context.appwrite.forSession(session.secret);
-	try {
-		await account.updatePrefs({ prefs: seedPrefs(context) });
-	} catch (error) {
-		// Readers fall back to the defaults; the guest session itself started.
-		console.warn("Could not save the default preferences", error);
-	}
-	return sessionUser(context, session.secret);
+	await seedNewAccountPrefs(context, session.token);
+	return sessionUser(context, session);
 }
 
 /**
- * Turns the current guest into a regular account in place (same `$id`, so its data
- * stays), then swaps the guest session for an email session. `updateEmail` is the
- * commit point; the rest is ordered so a failure never leaves the user without a
- * working session: the new session is created and its cookie written before the old
- * guest session is dropped.
+ * Turns the current guest into a regular account in place (same id, so its
+ * data stays). The backend resolves the session to keep; its cookie is
+ * written before anything else can fail.
  */
 export async function upgradeGuestHandler({
 	data,
 	context,
-}: HandlerArgs<SignUpInput>): Promise<AppUser> {
-	const { name, email, password } = data;
+}: HandlerArgs<SignUpInput>): Promise<User> {
 	context.rateLimit("signUp", context.clientIp);
 	const user = await requireUser(context);
 	if (!isGuest(user)) throw new AppError("FORBIDDEN");
-	// Taken before the cookie changes, so it is still the guest's client.
-	const guestClient = context.appwrite.user();
-	await guestClient.account.updateEmail({ email, password });
-	try {
-		await guestClient.account.updateName({ name });
-	} catch (error) {
-		// The email is already converted; the name can be set again later.
-		console.warn("Could not save the name", error);
-	}
-	const session = await context.appwrite
-		.admin()
-		.account.createEmailPasswordSession({ email, password });
+	const session = await context.session().upgradeGuest(data);
 	context.sessionCookie.write(session);
-	try {
-		await guestClient.account.deleteSession({ sessionId: "current" });
-	} catch (error) {
-		// The guest session expires on its own.
-		console.warn("Could not delete the guest session", error);
-	}
-	const { account } = context.appwrite.forSession(session.secret);
-	try {
-		await account.createVerification({
-			url: context.appLink("/verify-email"),
-		});
-	} catch (error) {
-		console.warn("Could not send the verification email", error);
-	}
-	return sessionUser(context, session.secret);
+	await trySendVerification(context, session.token);
+	return sessionUser(context, session);
 }
 
 /**
  * A guest signs in to an existing account. The order is fixed: the credentials are
- * validated first (the admin creates the session), so nothing is destroyed on a typo;
- * then the merge hook runs while the guest still exists; only then the guest is deleted.
+ * validated first (signing in), so nothing is destroyed on a typo; then the merge
+ * hook runs while the guest still exists; only then the guest is deleted.
  */
 export async function signInAndMergeGuestHandler({
 	data,
 	context,
-}: HandlerArgs<SignInInput>): Promise<AppUser> {
+}: HandlerArgs<SignInInput>): Promise<User> {
 	const { email, password } = data;
 	context.rateLimit("signIn", context.clientIp);
 	context.rateLimit("signInEmail", `${context.clientIp}|${email}`);
 	const guest = await requireUser(context);
 	if (!isGuest(guest)) throw new AppError("FORBIDDEN");
-	const admin = context.appwrite.admin();
-	const session = await admin.account.createEmailPasswordSession({
-		email,
-		password,
-	});
+	const session = await context.auth.signIn({ email, password });
 	try {
 		await serverHooks.onGuestMerge({
-			guestUserId: guest.$id,
+			guestUserId: guest.id,
 			userId: session.userId,
-			admin,
+			data: context.data,
 		});
-		await admin.users.delete({ userId: guest.$id });
+		await context.auth.admin.deleteUser(guest.id);
 	} catch (error) {
 		// Do not leave an orphan session in the real user's session list.
-		await admin.users
-			.deleteSession({ userId: session.userId, sessionId: session.$id })
+		await context.auth.admin
+			.deleteSession({ userId: session.userId, sessionId: session.id })
 			.catch((cleanupError: unknown) =>
 				console.warn("Could not delete the unused session", cleanupError),
 			);
 		throw error;
 	}
 	context.sessionCookie.write(session);
-	return sessionUser(context, session.secret);
+	return sessionUser(context, session);
 }
 
 /**
@@ -253,9 +194,9 @@ export async function requestPasswordResetHandler({
 	context.rateLimit("passwordResetIp", context.clientIp);
 	context.rateLimit("passwordReset", `${context.clientIp}|${email}`);
 	try {
-		await context.appwrite.admin().account.createRecovery({
+		await context.auth.requestPasswordReset({
 			email,
-			url: context.appLink("/reset-password"),
+			redirectUrl: context.appLink("/reset-password"),
 		});
 	} catch (error) {
 		const { code } = toAppError(error);
@@ -272,7 +213,7 @@ export async function resetPasswordHandler({
 	data,
 	context,
 }: HandlerArgs<ResetPasswordInput>): Promise<Ok> {
-	await context.appwrite.admin().account.updateRecovery(data);
+	await context.auth.resetPassword(data);
 	return { ok: true };
 }
 
@@ -281,20 +222,17 @@ export async function sendVerificationHandler({
 	context,
 }: NoInput): Promise<Ok> {
 	await requireRegisteredUser(context);
-	await context.appwrite.user().account.createVerification({
-		url: context.appLink("/verify-email"),
-	});
+	await context
+		.session()
+		.sendVerification({ redirectUrl: context.appLink("/verify-email") });
 	return { ok: true };
 }
 
-/**
- * Confirms an email from its link, as nobody: the link may be opened signed
- * out, and Appwrite refuses this call with an API key (`general_unauthorized_scope`).
- */
+/** Confirms an email from its link; the link may be opened signed out. */
 export async function confirmVerificationHandler({
 	data,
 	context,
 }: HandlerArgs<ConfirmVerificationInput>): Promise<Ok> {
-	await context.appwrite.anonymous().account.updateVerification(data);
+	await context.auth.confirmVerification(data.link);
 	return { ok: true };
 }

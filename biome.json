@@ -15,7 +15,7 @@
 			"**/vitest.config.ts",
 			"**/scripts/**/*",
 			"!**/src/routeTree.gen.ts",
-			"!**/src/lib/appwrite/generated",
+			"!**/src/adapters/appwrite/generated",
 			"!**/src/styles.css",
 			"!**/coverage"
 		]

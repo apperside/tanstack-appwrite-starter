@@ -8,7 +8,7 @@ import { PageSkeleton } from "#/components/layout/page-skeleton";
 import { textLinkClassName } from "#/components/layout/text-link";
 import { Button } from "#/components/ui/button";
 import { toast } from "#/components/ui/toast";
-import type { AppUser } from "#/lib/appwrite/app-models";
+import type { EmailLinkParams, User } from "#/core/auth/types";
 import { toAppError } from "#/lib/errors";
 import { isGuest } from "#/lib/guards";
 import {
@@ -20,22 +20,21 @@ import { useCurrentUser } from "../use-current-user";
 import { useSignOut } from "../use-sign-out";
 import { isRejectedLink, useEmailLink } from "./email-link";
 
-type Props = { userId?: string; secret?: string };
+type Props = { link: EmailLinkParams };
 
 /**
- * `/verify-email`. With a link (`userId` + `secret`) it confirms the email once,
+ * `/verify-email`. With a link it confirms the email once,
  * signed in or not. Without one (the route guard ensures an unverified,
  * signed-in user) it asks to check the inbox and can send a new link.
  */
 export function VerifyEmailPage(props: Props) {
-	const link = useEmailLink(props);
+	const link = useEmailLink(props.link);
 	if (!link) return <PageSkeleton variant="form" />;
-	const { userId, secret } = link;
-	if (userId && secret) return <ConfirmEmail userId={userId} secret={secret} />;
+	if (Object.keys(link).length > 0) return <ConfirmEmail link={link} />;
 	return <CheckInbox />;
 }
 
-function ConfirmEmail({ userId, secret }: Required<Props>) {
+function ConfirmEmail({ link }: Props) {
 	const { t } = useTranslation(["auth", "common", "errors"]);
 	const user = useCurrentUser();
 	const confirm = useAuthMutation(confirmVerificationMutation);
@@ -45,11 +44,11 @@ function ConfirmEmail({ userId, secret }: Required<Props>) {
 	// remount) runs this effect again.
 	const confirmed = useRef<string | null>(null);
 	useEffect(() => {
-		const link = `${userId}:${secret}`;
-		if (confirmed.current === link) return;
-		confirmed.current = link;
-		mutate({ userId, secret });
-	}, [userId, secret, mutate]);
+		const key = JSON.stringify(link);
+		if (confirmed.current === key) return;
+		confirmed.current = key;
+		mutate({ link });
+	}, [link, mutate]);
 
 	if (confirm.isSuccess) {
 		return (
@@ -63,12 +62,9 @@ function ConfirmEmail({ userId, secret }: Required<Props>) {
 
 	if (confirm.isError) {
 		const error = toAppError(confirm.error);
-		// The signed-in user's own link, used before: there is nothing wrong.
-		if (
-			isRejectedLink(error) &&
-			user?.$id === userId &&
-			user.emailVerification
-		) {
+		// A used link while already verified (most likely this very link,
+		// opened again): there is nothing wrong.
+		if (isRejectedLink(error) && user?.emailVerified) {
 			return (
 				<Verified
 					user={user}
@@ -94,10 +90,7 @@ function ConfirmEmail({ userId, secret }: Required<Props>) {
 				title={t("verify.errorTitle")}
 				subtitle={t(error.i18nKey)}
 			>
-				<Button
-					className="min-h-11 w-full"
-					onClick={() => mutate({ userId, secret })}
-				>
+				<Button className="min-h-11 w-full" onClick={() => mutate({ link })}>
 					{t("common:actions.retry")}
 				</Button>
 			</AuthLayout>
@@ -121,7 +114,7 @@ function Verified({
 	title,
 	subtitle,
 }: {
-	user: AppUser | null;
+	user: User | null;
 	title: string;
 	subtitle: string;
 }) {
@@ -140,7 +133,7 @@ function Verified({
 }
 
 /** A new link goes to the signed-in user's email; anyone else signs in first. */
-function NewLink({ user }: { user: AppUser | null }) {
+function NewLink({ user }: { user: User | null }) {
 	const { t } = useTranslation("auth");
 	if (user && !isGuest(user)) return <ResendLink email={user.email} />;
 	return (

@@ -35,12 +35,12 @@ describe("requestSessionCookie", () => {
 	it("writes a secure, http-only, lax cookie expiring with the session", () => {
 		const session = aSession();
 		requestSessionCookie().write(session);
-		expect(setCookie).toHaveBeenCalledWith("app_session", session.secret, {
+		expect(setCookie).toHaveBeenCalledWith("app_session", session.token, {
 			httpOnly: true,
 			secure: true,
 			sameSite: "lax",
 			path: "/",
-			expires: new Date(session.expire),
+			expires: new Date(session.expiresAt),
 		});
 	});
 

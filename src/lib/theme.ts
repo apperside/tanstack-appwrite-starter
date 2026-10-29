@@ -1,4 +1,4 @@
-import type { ThemePreference } from "#/lib/appwrite/app-models";
+import type { ThemePreference } from "#/core/prefs";
 import { readCookie } from "#/lib/cookies";
 
 /** The client-readable cookie holding the user's `ThemePreference`. */
@@ -21,7 +21,7 @@ export function resolveThemePreference({
 	prefsTheme,
 	cookieTheme,
 }: {
-	/** `AppUser.prefs.theme` of the signed-in user. */
+	/** `User.prefs.theme` of the signed-in user. */
 	prefsTheme?: unknown;
 	cookieTheme: ThemePreference;
 }): ThemePreference {

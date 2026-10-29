@@ -24,34 +24,18 @@ function isAppErrorCode(value: string): value is AppErrorCode {
 export class AppError extends Error {
 	override name = "AppError";
 
-	constructor(readonly code: AppErrorCode) {
-		super(code);
+	/** `cause`: the original error (an adapter's vendor error), for logs only. */
+	constructor(
+		readonly code: AppErrorCode,
+		options?: { cause?: unknown },
+	) {
+		super(code, options);
 	}
 
 	get i18nKey(): `errors:${AppErrorCode}` {
 		return `errors:${this.code}`;
 	}
 }
-
-// Type strings verified against appwrite/appwrite src/Appwrite/Extend/Exception.php (1.8.1 and main).
-const APPWRITE_TYPE_TO_CODE: Record<string, AppErrorCode> = {
-	user_invalid_credentials: "INVALID_CREDENTIALS",
-	user_password_mismatch: "INVALID_CREDENTIALS",
-	user_already_exists: "EMAIL_TAKEN",
-	user_email_already_exists: "EMAIL_TAKEN",
-	password_recently_used: "WEAK_PASSWORD",
-	password_personal_data: "WEAK_PASSWORD",
-	password_pwned: "WEAK_PASSWORD",
-	user_invalid_token: "INVALID_TOKEN",
-	user_unauthorized: "UNAUTHENTICATED",
-	general_unauthorized_scope: "UNAUTHENTICATED",
-	user_session_not_found: "UNAUTHENTICATED",
-	user_jwt_invalid: "UNAUTHENTICATED",
-	general_rate_limit_exceeded: "RATE_LIMITED",
-	row_not_found: "NOT_FOUND",
-	document_not_found: "NOT_FOUND",
-	user_not_found: "NOT_FOUND",
-};
 
 /** Messages of a failed `fetch` per engine: Chrome, Firefox, Safari, Node (undici). */
 const FETCH_FAILURE_MESSAGES = [
@@ -68,29 +52,12 @@ function isFetchFailure(error: unknown): boolean {
 }
 
 /**
- * Structural match so both the browser and node SDK exceptions are recognized
- * without importing either SDK here.
+ * Normalizes anything thrown (an adapter's `AppError`, a failed fetch, a
+ * serialized `AppError`) into an `AppError`. Adapters translate their vendor's
+ * errors themselves, so anything else is `UNKNOWN`.
  */
-function isAppwriteException(
-	error: unknown,
-): error is Error & { type: string; code: number } {
-	return (
-		error instanceof Error &&
-		error.name === "AppwriteException" &&
-		typeof (error as { type?: unknown }).type === "string" &&
-		typeof (error as { code?: unknown }).code === "number"
-	);
-}
-
-/** Normalizes anything thrown (Appwrite, fetch, a serialized AppError) into an `AppError`. */
 export function toAppError(error: unknown): AppError {
 	if (error instanceof AppError) return error;
-	if (isAppwriteException(error)) {
-		const code = Object.hasOwn(APPWRITE_TYPE_TO_CODE, error.type)
-			? APPWRITE_TYPE_TO_CODE[error.type]
-			: undefined;
-		return new AppError(code ?? "UNKNOWN");
-	}
 	if (isFetchFailure(error)) return new AppError("NETWORK");
 	if (error instanceof Error && isAppErrorCode(error.message)) {
 		return new AppError(error.message);

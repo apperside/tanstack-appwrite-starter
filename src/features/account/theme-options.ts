@@ -1,5 +1,5 @@
 import { type LucideIcon, MonitorIcon, MoonIcon, SunIcon } from "lucide-react";
-import type { ThemePreference } from "#/lib/appwrite/app-models";
+import type { ThemePreference } from "#/core/prefs";
 
 /** The theme choices, in display order: the user menu and the preferences page. */
 export const THEME_OPTIONS: { value: ThemePreference; icon: LucideIcon }[] = [

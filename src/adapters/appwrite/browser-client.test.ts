@@ -4,7 +4,7 @@ import { AppError } from "#/lib/errors";
 import { createBrowserRunner, withBrowserClient } from "./browser-client";
 
 const issueBrowserJwt = vi.hoisted(() => vi.fn());
-vi.mock("#/features/auth/auth.functions", () => ({ issueBrowserJwt }));
+vi.mock("./realtime.functions", () => ({ issueBrowserJwt }));
 
 const unauthorized = () =>
 	new AppwriteException("unauthorized", 401, "user_jwt_invalid");

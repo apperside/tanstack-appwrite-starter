@@ -1,16 +1,16 @@
-import type { AppUser } from "./appwrite/app-models";
+import type { User } from "#/core/auth/types";
 import { sanitizeRedirect } from "./redirect";
 
 export type GuardZone = "public" | "authed" | "app" | "onboarding";
 
-/** An anonymous account has no email. */
-export function isGuest(user: AppUser): boolean {
-	return user.email === "";
+/** An anonymous account: no email or password yet. */
+export function isGuest(user: User): boolean {
+	return user.isGuest;
 }
 
 type GuardInput = {
 	zone: GuardZone;
-	user: AppUser | null;
+	user: User | null;
 	requireEmailVerification: boolean;
 	/** Path plus search of the requested URL; round-tripped through `/login?redirect=`. */
 	location: string;
@@ -37,7 +37,7 @@ export function resolveGuardRedirect({
 	const onboarded = user.prefs.onboardingCompleted;
 	if (zone === "onboarding") return onboarded ? "/" : null;
 	if (zone === "app") {
-		if (requireEmailVerification && !isGuest(user) && !user.emailVerification) {
+		if (requireEmailVerification && !isGuest(user) && !user.emailVerified) {
 			return "/verify-email";
 		}
 		if (!onboarded) return "/onboarding";
@@ -56,11 +56,11 @@ export function resolveVerifyEmailRedirect({
 	user,
 	hasLink,
 }: {
-	user: AppUser | null;
+	user: User | null;
 	hasLink: boolean;
 }): string | null {
 	if (hasLink) return null;
 	if (!user) return `/login?redirect=${encodeURIComponent("/verify-email")}`;
-	if (isGuest(user) || user.emailVerification) return "/";
+	if (isGuest(user) || user.emailVerified) return "/";
 	return null;
 }

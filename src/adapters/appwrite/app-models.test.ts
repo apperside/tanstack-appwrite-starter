@@ -3,7 +3,6 @@ import {
 	APP_TABLES,
 	type AppTablesTypeMap,
 	type AppTodo,
-	DEFAULT_PREFS,
 	TodosPriority,
 } from "./app-models";
 
@@ -23,13 +22,5 @@ describe("app-models", () => {
 		expectTypeOf<AppTodo>().not.toHaveProperty("$createdAt");
 		expectTypeOf<AppTodo>().toHaveProperty("$id");
 		expectTypeOf<AppTodo["$id"]>().toEqualTypeOf<string | undefined>();
-	});
-
-	it("has the default prefs", () => {
-		expect(DEFAULT_PREFS).toEqual({
-			onboardingCompleted: false,
-			locale: "en",
-			theme: "system",
-		});
 	});
 });

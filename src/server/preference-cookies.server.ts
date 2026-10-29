@@ -4,8 +4,8 @@ import {
 	setCookie,
 } from "@tanstack/react-start/server";
 import { serverEnv } from "#/config/env";
+import type { ThemePreference } from "#/core/prefs";
 import { LOCALE_COOKIE, type LocaleSources } from "#/i18n/locale";
-import type { ThemePreference } from "#/lib/appwrite/app-models";
 import { ONE_YEAR_SECONDS, readCookie } from "#/lib/cookies";
 import {
 	GUEST_BANNER_COOKIE,

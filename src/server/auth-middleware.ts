@@ -18,7 +18,8 @@ function normalizeError(
 		const where = serverFn
 			? `${serverFn.name} (${serverFn.filename})`
 			: "a server function";
-		console.error(`Unexpected error in ${where}`, error);
+		// An adapter's translated error keeps the vendor's original as its cause.
+		console.error(`Unexpected error in ${where}`, appError.cause ?? error);
 	}
 	return appError;
 }
@@ -33,7 +34,7 @@ export const authMiddleware = createMiddleware({ type: "function" }).server(
 	async ({ next, serverFnMeta }) => {
 		try {
 			const { buildRequestContext } = await import("./auth-middleware.server");
-			return await next({ context: buildRequestContext() });
+			return await next({ context: await buildRequestContext() });
 		} catch (error) {
 			throw normalizeError(error, serverFnMeta);
 		}

@@ -11,6 +11,5 @@ export const Route = createFileRoute("/reset-password")({
 });
 
 function ResetPassword() {
-	const { userId, secret } = Route.useSearch();
-	return <ResetPasswordPage userId={userId} secret={secret} />;
+	return <ResetPasswordPage link={Route.useSearch()} />;
 }

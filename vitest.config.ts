@@ -38,7 +38,7 @@ export default defineConfig({
 			include: ["src/**/*.{ts,tsx}"],
 			exclude: [
 				"src/routeTree.gen.ts",
-				"src/lib/appwrite/generated/**",
+				"src/adapters/appwrite/generated/**",
 				"src/test/**",
 				"**/*.test.*",
 				"src/routes/**",
@@ -49,6 +49,8 @@ export default defineConfig({
 			thresholds: {
 				"src/lib/**": { lines: 90, branches: 90 },
 				"src/server/**": { lines: 90, branches: 90 },
+				"src/core/**": { lines: 90, branches: 90 },
+				"src/adapters/**": { lines: 90, branches: 85 },
 				"src/features/**/*.functions.ts": { lines: 90, branches: 90 },
 				"src/features/**/*.handlers.server.ts": { lines: 90, branches: 90 },
 				"src/components/**": { lines: 80, branches: 80 },

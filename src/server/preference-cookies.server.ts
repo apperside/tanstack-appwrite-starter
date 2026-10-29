@@ -4,19 +4,12 @@ import {
 	setCookie,
 } from "@tanstack/react-start/server";
 import { serverEnv } from "#/config/env";
-import type { ThemePreference } from "#/core/prefs";
 import { LOCALE_COOKIE, type LocaleSources } from "#/i18n/locale";
 import { ONE_YEAR_SECONDS, readCookie } from "#/lib/cookies";
-import {
-	GUEST_BANNER_COOKIE,
-	parseGuestBannerCookie,
-} from "#/lib/guest-banner";
-import { parseSidebarCookie, type SidebarMode } from "#/lib/sidebar-state";
-import { parseThemeCookie, THEME_COOKIE } from "#/lib/theme";
+import { GUEST_BANNER_COOKIE } from "#/lib/guest-banner";
+import { THEME_COOKIE } from "#/lib/theme";
 import type { PreferenceCookies } from "./context";
 import { isSecure } from "./session-cookie.server";
-
-export { LOCALE_COOKIE, THEME_COOKIE };
 
 /** Readable by the client (no httpOnly): the theme script and i18n detection use them. */
 function scope() {
@@ -40,25 +33,15 @@ export function requestPreferenceCookies(): PreferenceCookies {
 	};
 }
 
-/** The theme preference sent with the current request; `system` when absent or invalid. */
-export function readThemeCookie(): ThemePreference {
-	return parseThemeCookie(getRequestHeader("cookie") ?? "");
+/** The current request's `Cookie` header, for the shared cookie parsers. */
+export function requestCookieHeader(): string {
+	return getRequestHeader("cookie") ?? "";
 }
 
 /** The request's locale cookie and `Accept-Language`, for `resolveLocale`. */
 export function readLocaleHints(): Omit<LocaleSources, "prefsLocale"> {
 	return {
-		cookieLocale: readCookie(getRequestHeader("cookie") ?? "", LOCALE_COOKIE),
+		cookieLocale: readCookie(requestCookieHeader(), LOCALE_COOKIE),
 		acceptLanguage: getRequestHeader("accept-language"),
 	};
-}
-
-/** The sidebar mode sent with the current request; `auto` when absent or invalid. */
-export function readSidebarCookie(): SidebarMode {
-	return parseSidebarCookie(getRequestHeader("cookie") ?? "");
-}
-
-/** Whether the guest banner was dismissed in this browser session. */
-export function readGuestBannerDismissed(): boolean {
-	return parseGuestBannerCookie(getRequestHeader("cookie") ?? "");
 }

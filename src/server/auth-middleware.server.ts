@@ -5,6 +5,7 @@ import type { User } from "#/core/auth/types";
 import type { Backend } from "#/core/backend";
 import { resolveLocale } from "#/i18n/locale";
 import { AppError, toAppError } from "#/lib/errors";
+import { parseThemeCookie } from "#/lib/theme";
 import { appLink } from "./app-link";
 import { getBackend } from "./backend.server";
 import { resolveClientIp } from "./client-ip.server";
@@ -15,7 +16,7 @@ import type {
 } from "./context";
 import {
 	readLocaleHints,
-	readThemeCookie,
+	requestCookieHeader,
 	requestPreferenceCookies,
 } from "./preference-cookies.server";
 import { rateLimit } from "./rate-limit.server";
@@ -89,7 +90,7 @@ export async function buildRequestContext(): Promise<ServerContext> {
 		preferenceCookies: requestPreferenceCookies(),
 		browserPrefs: {
 			locale: resolveLocale(readLocaleHints()),
-			theme: readThemeCookie(),
+			theme: parseThemeCookie(requestCookieHeader()),
 		},
 		// X-Forwarded-For is client-controlled: trust only the hops our proxies add.
 		clientIp: resolveClientIp({

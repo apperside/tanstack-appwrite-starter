@@ -15,8 +15,7 @@ import {
 	resolveThemePreference,
 	themeInitScript,
 } from "#/lib/theme";
-import { getLocaleHints } from "#/server/locale-preference";
-import { getThemePreference } from "#/server/theme-preference";
+import { getLocaleHints, getThemePreference } from "#/server/preferences";
 import appCss from "../styles.css?url";
 
 // DEV only: the condition is statically false in production builds, so the chunk is dropped.

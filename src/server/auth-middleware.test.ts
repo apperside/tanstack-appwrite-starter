@@ -23,7 +23,7 @@ vi.mock("./session-cookie.server", () => ({
 vi.mock("./preference-cookies.server", () => ({
 	requestPreferenceCookies: () => ({}),
 	readLocaleHints: () => ({ acceptLanguage: "it-IT,it;q=0.9" }),
-	readThemeCookie: () => "dark",
+	requestCookieHeader: () => "theme=dark",
 }));
 const backendAuth = vi.hoisted(() => vi.fn());
 vi.mock("./backend.server", () => ({

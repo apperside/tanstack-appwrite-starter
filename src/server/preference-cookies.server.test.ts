@@ -5,13 +5,9 @@ import {
 } from "@tanstack/react-start/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
-	LOCALE_COOKIE,
-	readGuestBannerDismissed,
 	readLocaleHints,
-	readSidebarCookie,
-	readThemeCookie,
+	requestCookieHeader,
 	requestPreferenceCookies,
-	THEME_COOKIE,
 } from "./preference-cookies.server";
 
 vi.mock("@tanstack/react-start/server", () => ({
@@ -27,10 +23,6 @@ describe("requestPreferenceCookies", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
 		env.APP_URL = "https://app.test";
-	});
-
-	it("names the cookies locale and theme", () => {
-		expect([LOCALE_COOKIE, THEME_COOKIE]).toEqual(["locale", "theme"]);
 	});
 
 	it("writes a one-year, lax, client-readable locale cookie", () => {
@@ -68,16 +60,13 @@ describe("requestPreferenceCookies", () => {
 	});
 });
 
-describe("readThemeCookie", () => {
-	it("reads the request's theme cookie", () => {
+describe("requestCookieHeader", () => {
+	it("is the request's Cookie header, empty when absent", () => {
 		vi.mocked(getRequestHeader).mockReturnValue("locale=it; theme=dark");
-		expect(readThemeCookie()).toBe("dark");
+		expect(requestCookieHeader()).toBe("locale=it; theme=dark");
 		expect(getRequestHeader).toHaveBeenCalledWith("cookie");
-	});
-
-	it("is system without a cookie header", () => {
 		vi.mocked(getRequestHeader).mockReturnValue(undefined);
-		expect(readThemeCookie()).toBe("system");
+		expect(requestCookieHeader()).toBe("");
 	});
 });
 
@@ -98,23 +87,5 @@ describe("readLocaleHints", () => {
 			cookieLocale: undefined,
 			acceptLanguage: undefined,
 		});
-	});
-});
-
-describe("readSidebarCookie", () => {
-	it("reads the request's sidebar state, auto when absent", () => {
-		vi.mocked(getRequestHeader).mockReturnValue("sidebar_state=collapsed");
-		expect(readSidebarCookie()).toBe("collapsed");
-		vi.mocked(getRequestHeader).mockReturnValue(undefined);
-		expect(readSidebarCookie()).toBe("auto");
-	});
-});
-
-describe("readGuestBannerDismissed", () => {
-	it("reads the request's guest-banner cookie, false when absent", () => {
-		vi.mocked(getRequestHeader).mockReturnValue("guest_banner_dismissed=1");
-		expect(readGuestBannerDismissed()).toBe(true);
-		vi.mocked(getRequestHeader).mockReturnValue(undefined);
-		expect(readGuestBannerDismissed()).toBe(false);
 	});
 });

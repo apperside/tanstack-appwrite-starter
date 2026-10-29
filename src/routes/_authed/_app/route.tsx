@@ -2,8 +2,7 @@ import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
 import { AppShell } from "#/components/layout/app-shell";
 import { publicEnv } from "#/config/env";
 import { resolveGuardRedirect } from "#/lib/guards";
-import { getGuestBannerDismissed } from "#/server/guest-banner-preference";
-import { getSidebarMode } from "#/server/sidebar-preference";
+import { getGuestBannerDismissed, getSidebarMode } from "#/server/preferences";
 
 export const Route = createFileRoute("/_authed/_app")({
 	beforeLoad: ({ context, location }) => {

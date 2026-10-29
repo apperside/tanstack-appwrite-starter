@@ -8,10 +8,8 @@ import { aUser } from "#/test/fixtures";
 import { Route } from "./__root";
 
 vi.mock("#/features/auth/auth.functions", () => ({ getCurrentUser: vi.fn() }));
-vi.mock("#/server/theme-preference", () => ({
+vi.mock("#/server/preferences", () => ({
 	getThemePreference: async () => "dark",
-}));
-vi.mock("#/server/locale-preference", () => ({
 	getLocaleHints: async () => ({ cookieLocale: "it" }),
 }));
 vi.mock("../styles.css?url", () => ({ default: "/styles.css" }));

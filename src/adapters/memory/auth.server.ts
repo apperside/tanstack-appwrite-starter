@@ -258,6 +258,9 @@ export function createMemoryAuth({ now, sendEmail }: MemoryAuthOptions) {
 					throw new AppError("INVALID_CREDENTIALS");
 				}
 				user.passwordHash = hashPassword(password);
+				for (const [key, session] of sessions) {
+					if (session.userId === user.id && key !== token) sessions.delete(key);
+				}
 			},
 			sendVerification: async ({ redirectUrl }) => {
 				sendLink(registered(), "verification", redirectUrl);
@@ -340,7 +343,11 @@ export function createMemoryAuth({ now, sendEmail }: MemoryAuthOptions) {
 				sendLink(user, "recovery", redirectUrl);
 			},
 			resetPassword: async ({ link, password }) => {
-				useLink(link, "recovery").passwordHash = hashPassword(password);
+				const user = useLink(link, "recovery");
+				user.passwordHash = hashPassword(password);
+				for (const [key, session] of sessions) {
+					if (session.userId === user.id) sessions.delete(key);
+				}
 			},
 			confirmVerification: async (link) => {
 				useLink(link, "verification").emailVerified = true;

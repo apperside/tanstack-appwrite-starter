@@ -31,7 +31,11 @@ export interface AuthService {
 		email: string;
 		redirectUrl: string;
 	}): Promise<void>;
-	/** `INVALID_TOKEN` for a link that is malformed, used or expired. */
+	/**
+	 * Sets the password and ends every session of the account (whoever reset
+	 * it may be locking out an intruder). `INVALID_TOKEN` for a link that is
+	 * malformed, used or expired.
+	 */
 	resetPassword(input: {
 		link: EmailLinkParams;
 		password: string;
@@ -54,7 +58,10 @@ export interface SessionAuth {
 	updateName(name: string): Promise<void>;
 	/** The new email is unverified. `INVALID_CREDENTIALS`, `EMAIL_TAKEN`. */
 	updateEmail(input: Credentials): Promise<void>;
-	/** `INVALID_CREDENTIALS` for a wrong `oldPassword`; `WEAK_PASSWORD`. */
+	/**
+	 * Changes the password and ends the account's other sessions; this one
+	 * carries on. `INVALID_CREDENTIALS` for a wrong `oldPassword`; `WEAK_PASSWORD`.
+	 */
 	updatePassword(input: {
 		password: string;
 		oldPassword: string;

@@ -89,8 +89,15 @@ export function createAppwriteAuth(clients: AppwriteClients): AuthService {
 			updateEmail: async (input) => {
 				await account.updateEmail(input);
 			},
+			// Appwrite keeps the other sessions alive unless the project opts in.
 			updatePassword: async (input) => {
 				await account.updatePassword(input);
+				const { sessions } = await account.listSessions();
+				for (const session of sessions) {
+					if (!session.current) {
+						await account.deleteSession({ sessionId: session.$id });
+					}
+				}
 			},
 			sendVerification: async ({ redirectUrl }) => {
 				await account.createVerification({ url: redirectUrl });
@@ -162,10 +169,13 @@ export function createAppwriteAuth(clients: AppwriteClients): AuthService {
 				});
 			},
 			resetPassword: async (input) => {
+				const { userId, secret } = parseLink(input.link);
 				await admin().account.updateRecovery({
-					...parseLink(input.link),
+					userId,
+					secret,
 					password: input.password,
 				});
+				await admin().users.deleteSessions({ userId });
 			},
 			// As nobody: the link may be opened signed out, and Appwrite refuses
 			// this call with an API key (`general_unauthorized_scope`).

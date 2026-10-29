@@ -94,9 +94,10 @@ describe("createAppwriteAuth: service", () => {
 	});
 
 	it("sends recovery with the redirect URL and completes it from the link", async () => {
-		const { auth, adminAccount } = setup();
+		const { auth, adminAccount, adminUsers } = setup();
 		adminAccount.createRecovery.mockResolvedValue({} as never);
 		adminAccount.updateRecovery.mockResolvedValue({} as never);
+		adminUsers.deleteSessions.mockResolvedValue({} as never);
 		await auth.requestPasswordReset({
 			email: "a@b.test",
 			redirectUrl: "http://app.test/reset-password",
@@ -110,6 +111,23 @@ describe("createAppwriteAuth: service", () => {
 			...link,
 			password: "new-password",
 		});
+		expect(adminUsers.deleteSessions).toHaveBeenCalledWith({ userId: "u1" });
+		expect(
+			adminUsers.deleteSessions.mock.invocationCallOrder[0],
+		).toBeGreaterThan(
+			adminAccount.updateRecovery.mock.invocationCallOrder[0] as number,
+		);
+	});
+
+	it("keeps the sessions when the recovery link is refused", async () => {
+		const { auth, adminAccount, adminUsers } = setup();
+		adminAccount.updateRecovery.mockRejectedValue(
+			appwriteError("user_invalid_token"),
+		);
+		await expect(
+			auth.resetPassword({ link, password: "new-password" }),
+		).rejects.toEqual(new AppError("INVALID_TOKEN"));
+		expect(adminUsers.deleteSessions).not.toHaveBeenCalled();
 	});
 
 	it("confirms a verification as nobody: Appwrite refuses an API key here", async () => {
@@ -193,6 +211,7 @@ describe("createAppwriteAuth: session", () => {
 		] as const) {
 			userAccount[method].mockResolvedValue({} as never);
 		}
+		userAccount.listSessions.mockResolvedValue({ total: 0, sessions: [] });
 		const session = auth.session("s");
 		await session.signOutEverywhere();
 		await session.updateName("Ann");
@@ -209,6 +228,39 @@ describe("createAppwriteAuth: session", () => {
 		expect(userAccount.createVerification).toHaveBeenCalledWith({
 			url: "http://app.test/v",
 		});
+	});
+
+	it("ends the other sessions after changing the password", async () => {
+		const { auth, userAccount } = setup();
+		userAccount.updatePassword.mockResolvedValue({} as never);
+		userAccount.deleteSession.mockResolvedValue({} as never);
+		userAccount.listSessions.mockResolvedValue({
+			total: 3,
+			sessions: [
+				anAppwriteSession({ $id: "cur", current: true }),
+				anAppwriteSession({ $id: "a", current: false }),
+				anAppwriteSession({ $id: "b", current: false }),
+			],
+		});
+		await auth
+			.session("s")
+			.updatePassword({ password: "p2", oldPassword: "p1" });
+		expect(userAccount.deleteSession.mock.calls).toEqual([
+			[{ sessionId: "a" }],
+			[{ sessionId: "b" }],
+		]);
+	});
+
+	it("keeps every session when the password change is refused", async () => {
+		const { auth, userAccount } = setup();
+		userAccount.updatePassword.mockRejectedValue(
+			appwriteError("user_invalid_credentials"),
+		);
+		await expect(
+			auth.session("s").updatePassword({ password: "p2", oldPassword: "x" }),
+		).rejects.toEqual(new AppError("INVALID_CREDENTIALS"));
+		expect(userAccount.listSessions).not.toHaveBeenCalled();
+		expect(userAccount.deleteSession).not.toHaveBeenCalled();
 	});
 
 	it("merges a prefs patch into the stored prefs, read fresh (Appwrite replaces the whole object)", async () => {

@@ -58,6 +58,7 @@ const USERS_METHODS = [
 	"get",
 	"delete",
 	"deleteSession",
+	"deleteSessions",
 ] as const satisfies readonly (keyof Users)[];
 
 // Includes every method the typed tables wrappers call.

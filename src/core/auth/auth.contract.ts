@@ -179,6 +179,22 @@ export function describeAuthContract(
 				).resolves.toBeTruthy();
 			});
 
+			it("ends the other sessions when the password changes", async () => {
+				const first = await auth.signUp(ann);
+				const second = await auth.signIn(ann);
+				const other = await auth.signUp(bob);
+				await auth.session(second.token).updatePassword({
+					password: "new-password",
+					oldPassword: ann.password,
+				});
+				await expect(auth.session(first.token).getUser()).rejects.toEqual(
+					rejection("UNAUTHENTICATED"),
+				);
+				for (const token of [second.token, other.token]) {
+					await expect(auth.session(token).getUser()).resolves.toBeTruthy();
+				}
+			});
+
 			it("merges preference patches", async () => {
 				const { token } = await auth.signUp(ann);
 				await auth.session(token).updatePrefs({ locale: "it", theme: "dark" });
@@ -219,6 +235,21 @@ export function describeAuthContract(
 				await expect(
 					auth.resetPassword({ link, password: "again-password" }),
 				).rejects.toEqual(rejection("INVALID_TOKEN"));
+			});
+
+			it("ends every session of the account on a reset", async () => {
+				const { token } = await auth.signUp(ann);
+				const other = await auth.signUp(bob);
+				await auth.requestPasswordReset({
+					email: ann.email,
+					redirectUrl: REDIRECT,
+				});
+				const link = await lastLink(ann.email, "recovery");
+				await auth.resetPassword({ link, password: "reset-password" });
+				await expect(auth.session(token).getUser()).rejects.toEqual(
+					rejection("UNAUTHENTICATED"),
+				);
+				await expect(auth.session(other.token).getUser()).resolves.toBeTruthy();
 			});
 
 			it("rejects a malformed link", async () => {

@@ -1,17 +1,15 @@
 import type { Backend } from "#/core/backend";
-import { createMemoryAuth, type SentEmail } from "./auth.server";
+import type { SendEmail } from "../shared/mail/mail";
+import { getSendEmail } from "../shared/mail/mailer.server";
+import { createMemoryAuth } from "./auth.server";
 import { createMemoryTodos } from "./todos.server";
 
 export type MemoryBackendOptions = {
 	/** Injectable clock, for tests. */
 	now?: () => number;
-	/** Receives every email; the default prints the link to the server log. */
-	sendEmail?: (email: SentEmail) => void;
+	/** Receives every email; the default is the env-configured mailer. */
+	sendEmail?: SendEmail;
 };
-
-function logEmail({ to, purpose, url }: SentEmail) {
-	console.info(`[memory backend] ${purpose} email to ${to}: ${url}`);
-}
 
 /**
  * A backend in process memory: no service to run, nothing survives a restart,
@@ -19,7 +17,7 @@ function logEmail({ to, purpose, url }: SentEmail) {
  */
 export function createMemoryBackend({
 	now = Date.now,
-	sendEmail = logEmail,
+	sendEmail = getSendEmail(),
 }: MemoryBackendOptions = {}): Backend {
 	const auth = createMemoryAuth({ now, sendEmail });
 	return {

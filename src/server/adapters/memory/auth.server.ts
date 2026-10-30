@@ -7,8 +7,9 @@ import type {
 	User,
 } from "#/core/auth/types";
 import type { RequestInfo } from "#/core/backend";
-import type { AppPrefs } from "#/core/prefs";
+import { type AppPrefs, DEFAULT_PREFS } from "#/core/prefs";
 import { AppError } from "#/lib/errors";
+import type { EmailPurpose, SendEmail } from "../shared/mail/mail";
 import {
 	hashPassword,
 	LOW_SCRYPT,
@@ -38,7 +39,7 @@ type StoredSession = {
 	userAgent: string | undefined;
 };
 
-type LinkPurpose = "verification" | "recovery";
+type LinkPurpose = EmailPurpose;
 
 type StoredLink = {
 	purpose: LinkPurpose;
@@ -48,13 +49,10 @@ type StoredLink = {
 	expiresAt: number;
 };
 
-/** An email the memory backend would have sent. */
-export type SentEmail = { to: string; purpose: LinkPurpose; url: string };
-
 export type MemoryAuthOptions = {
 	now: () => number;
-	/** Receives every email; the default prints the link to the server log. */
-	sendEmail: (email: SentEmail) => void;
+	/** Receives every email. */
+	sendEmail: SendEmail;
 };
 
 /** The memory backend is for development and tests: hash cheaply. */
@@ -122,7 +120,7 @@ export function createMemoryAuth({ now, sendEmail }: MemoryAuthOptions) {
 		};
 	}
 
-	function sendLink(
+	async function sendLink(
 		user: StoredUser,
 		purpose: LinkPurpose,
 		redirectUrl: string,
@@ -135,7 +133,12 @@ export function createMemoryAuth({ now, sendEmail }: MemoryAuthOptions) {
 			email: user.email,
 			expiresAt: now() + ttl,
 		});
-		sendEmail({ to: user.email, purpose, url: linkTo(redirectUrl, { token }) });
+		await sendEmail({
+			to: user.email,
+			purpose,
+			url: linkTo(redirectUrl, { token }),
+			locale: user.prefs.locale ?? DEFAULT_PREFS.locale,
+		});
 	}
 
 	/** Consumes a link: valid once, before it expires. */
@@ -236,7 +239,7 @@ export function createMemoryAuth({ now, sendEmail }: MemoryAuthOptions) {
 				}
 			},
 			sendVerification: async ({ redirectUrl }) => {
-				sendLink(registered(), "verification", redirectUrl);
+				await sendLink(registered(), "verification", redirectUrl);
 			},
 			updatePrefs: async (patch) => {
 				const { user } = current();
@@ -313,7 +316,7 @@ export function createMemoryAuth({ now, sendEmail }: MemoryAuthOptions) {
 			requestPasswordReset: async ({ email, redirectUrl }) => {
 				const user = findByEmail(email);
 				if (!user) throw new AppError("NOT_FOUND");
-				sendLink(user, "recovery", redirectUrl);
+				await sendLink(user, "recovery", redirectUrl);
 			},
 			resetPassword: async ({ link, password }) => {
 				const user = useLink(link, "recovery");

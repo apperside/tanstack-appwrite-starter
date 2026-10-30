@@ -1,0 +1,10 @@
+{
+	"verification": {
+		"subject": "Verifica la tua email",
+		"text": "Benvenuto! Conferma il tuo indirizzo email per completare la configurazione dell'account: {{url}}"
+	},
+	"recovery": {
+		"subject": "Reimposta la tua password",
+		"text": "Abbiamo ricevuto una richiesta per reimpostare la tua password. Scegline una nuova qui: {{url}}. Se non sei stato tu, ignora questa email."
+	}
+}

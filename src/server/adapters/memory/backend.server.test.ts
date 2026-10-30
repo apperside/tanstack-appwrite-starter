@@ -1,16 +1,20 @@
 import { describe, expect, it, vi } from "vitest";
 import { describeAuthContract } from "#/core/auth/auth.contract";
 import { describeTodosContract } from "#/core/data/todos.contract";
-import type { SentEmail } from "./auth.server";
+import type { AuthEmail } from "../shared/mail/mail";
 import { createMemoryBackend } from "./backend.server";
 
 function harness() {
-	const emails: SentEmail[] = [];
-	const backend = createMemoryBackend({ sendEmail: (e) => emails.push(e) });
+	const emails: AuthEmail[] = [];
+	const backend = createMemoryBackend({
+		sendEmail: async (e) => {
+			emails.push(e);
+		},
+	});
 	return {
 		backend,
 		auth: backend.auth({ userAgent: undefined }),
-		lastLink: async (email: string, purpose: SentEmail["purpose"]) => {
+		lastLink: async (email: string, purpose: AuthEmail["purpose"]) => {
 			const sent = [...emails]
 				.reverse()
 				.find((e) => e.to === email && e.purpose === purpose);
@@ -27,7 +31,7 @@ describe("memory backend", () => {
 	const ann = { name: "Ann", email: "ann@example.test", password: "password1" };
 
 	it("shares one store between requests", async () => {
-		const backend = createMemoryBackend({ sendEmail: () => {} });
+		const backend = createMemoryBackend({ sendEmail: async () => {} });
 		const { token } = await backend.auth({ userAgent: undefined }).signUp(ann);
 		await expect(
 			backend.auth({ userAgent: undefined }).session(token).getUser(),
@@ -45,7 +49,8 @@ describe("memory backend", () => {
 		expect(Object.keys(link).sort()).toEqual(["keep", "token"]);
 	});
 
-	it("logs emails by default", async () => {
+	it("sends through the env mailer by default", async () => {
+		vi.stubEnv("MAIL_PROVIDER", "console");
 		const info = vi.spyOn(console, "info").mockImplementation(() => {});
 		const auth = createMemoryBackend().auth({ userAgent: undefined });
 		await auth.signUp(ann);
@@ -54,17 +59,39 @@ describe("memory backend", () => {
 			redirectUrl: "https://app.test/reset-password",
 		});
 		expect(info).toHaveBeenCalledWith(
-			expect.stringContaining("recovery email to ann@example.test"),
+			expect.stringContaining("ann@example.test"),
+		);
+		expect(info).toHaveBeenCalledWith(
+			expect.stringContaining("/reset-password?token="),
 		);
 		info.mockRestore();
+		vi.unstubAllEnvs();
+	});
+
+	it("emails in the user's stored locale", async () => {
+		const emails: AuthEmail[] = [];
+		const auth = createMemoryBackend({
+			sendEmail: async (e) => {
+				emails.push(e);
+			},
+		}).auth({ userAgent: undefined });
+		const { token } = await auth.signUp(ann);
+		await auth.session(token).updatePrefs({ locale: "it" });
+		await auth.requestPasswordReset({
+			email: ann.email,
+			redirectUrl: "https://app.test/reset-password",
+		});
+		expect(emails.at(-1)?.locale).toBe("it");
 	});
 
 	it("expires sessions and links on its clock", async () => {
 		let now = Date.parse("2026-01-01T00:00:00Z");
-		const emails: SentEmail[] = [];
+		const emails: AuthEmail[] = [];
 		const auth = createMemoryBackend({
 			now: () => now,
-			sendEmail: (e) => emails.push(e),
+			sendEmail: async (e) => {
+				emails.push(e);
+			},
 		}).auth({ userAgent: undefined });
 		const { token } = await auth.signUp(ann);
 		await auth.requestPasswordReset({

@@ -1,0 +1,10 @@
+{
+	"verification": {
+		"subject": "Verify your email",
+		"text": "Welcome! Confirm your email address to finish setting up your account: {{url}}"
+	},
+	"recovery": {
+		"subject": "Reset your password",
+		"text": "We got a request to reset your password. Choose a new one here: {{url}}. If it wasn't you, ignore this email."
+	}
+}

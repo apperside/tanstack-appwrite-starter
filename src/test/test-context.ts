@@ -7,8 +7,8 @@ import {
 	type Locale,
 	type ThemePreference,
 } from "#/core/prefs";
-import type { SentEmail } from "#/server/adapters/memory/auth.server";
 import { createMemoryBackend } from "#/server/adapters/memory/backend.server";
+import type { AuthEmail } from "#/server/adapters/shared/mail/mail";
 import { buildServerContext } from "#/server/context/context.server";
 import type {
 	PreferenceCookies,
@@ -176,9 +176,11 @@ export function createTestContext({
 	userAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Firefox/140.0",
 	appUrl = "http://app.test",
 }: TestContextOptions = {}) {
-	const emails: SentEmail[] = [];
+	const emails: AuthEmail[] = [];
 	const backend = createMemoryBackend({
-		sendEmail: (email) => emails.push(email),
+		sendEmail: async (email) => {
+			emails.push(email);
+		},
 	});
 	const real = backend.auth({ userAgent });
 	const spies = spyAuth(real);
@@ -198,7 +200,7 @@ export function createTestContext({
 	});
 
 	/** The last emailed link's parameters, for `purpose`. */
-	function lastLink(purpose: SentEmail["purpose"]): EmailLinkParams {
+	function lastLink(purpose: AuthEmail["purpose"]): EmailLinkParams {
 		const email = [...emails]
 			.reverse()
 			.find((sent) => sent.purpose === purpose);

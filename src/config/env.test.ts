@@ -54,6 +54,7 @@ describe("parseServerEnv", () => {
 
 	it.each([
 		["memory", "memory"],
+		["postgres", "postgres"],
 		["appwrite", "appwrite"],
 		["", "appwrite"],
 	])("parses BACKEND %j as %j", (raw, expected) => {

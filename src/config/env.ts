@@ -12,7 +12,7 @@ function emptyAsUnset<T extends z.ZodMiniType>(schema: T) {
 // Each backend adapter parses its own variables (e.g. `#/adapters/appwrite/env`).
 
 /** The backend adapters `#/server/backend.server` can load. */
-export const BACKENDS = ["appwrite", "memory"] as const;
+export const BACKENDS = ["appwrite", "memory", "postgres"] as const;
 
 const publicSchema = z.object({
 	// Empty string (e.g. a copied .env.example) counts as unset.

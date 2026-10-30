@@ -1,10 +1,16 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getBackend, loadBackend } from "./backend.server";
 
+const createAppwriteBackend = vi.hoisted(() => vi.fn());
 vi.mock("#/server/adapters/appwrite/backend.server", () => ({
-	createAppwriteBackend: () => ({ name: "appwrite" }),
+	createAppwriteBackend,
+}));
+vi.mock("#/server/adapters/postgres/backend.server", () => ({
+	createPostgresBackendFromEnv: async () => ({ name: "postgres" }),
 }));
 vi.mock("#/config/env", () => ({ serverEnv: () => ({ BACKEND: "appwrite" }) }));
+
+beforeEach(() => createAppwriteBackend.mockReturnValue({ name: "appwrite" }));
 
 describe("loadBackend", () => {
 	afterEach(() => vi.unstubAllEnvs());
@@ -12,6 +18,12 @@ describe("loadBackend", () => {
 	it("loads the Appwrite adapter", async () => {
 		await expect(loadBackend("appwrite")).resolves.toEqual({
 			name: "appwrite",
+		});
+	});
+
+	it("loads the postgres adapter", async () => {
+		await expect(loadBackend("postgres")).resolves.toEqual({
+			name: "postgres",
 		});
 	});
 
@@ -34,5 +46,15 @@ describe("getBackend", () => {
 		const first = getBackend();
 		expect(getBackend()).toBe(first);
 		await expect(first).resolves.toEqual({ name: "appwrite" });
+	});
+
+	it("retries the load after a failure", async () => {
+		vi.resetModules();
+		const { getBackend: fresh } = await import("./backend.server");
+		createAppwriteBackend.mockImplementationOnce(() => {
+			throw new Error("down");
+		});
+		await expect(fresh()).rejects.toThrow("down");
+		await expect(fresh()).resolves.toEqual({ name: "appwrite" });
 	});
 });

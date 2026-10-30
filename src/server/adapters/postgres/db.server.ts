@@ -7,7 +7,6 @@ import * as schema from "./schema";
 export type PostgresDb = PgDatabase<PgQueryResultHKT, typeof schema>;
 
 /**
- * @public Used by the backend wiring (a later task).
  * Connects to the server at `url`; end `sql` to close the pool.
  */
 export function connectPostgres(url: string): {

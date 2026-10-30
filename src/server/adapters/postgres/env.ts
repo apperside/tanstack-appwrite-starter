@@ -12,7 +12,6 @@ export function parsePostgresEnv(raw: Record<string, unknown>) {
 let cached: ReturnType<typeof parsePostgresEnv> | undefined;
 
 /**
- * @public Used by the backend wiring (a later task).
  * Server-only. Parses `process.env` once, on first call. */
 export function postgresEnv() {
 	cached ??= parsePostgresEnv(process.env);

@@ -15,6 +15,10 @@ export async function loadBackend(name: BackendName): Promise<Backend> {
 			return (
 				await import("#/server/adapters/appwrite/backend.server")
 			).createAppwriteBackend();
+		case "postgres":
+			return (
+				await import("#/server/adapters/postgres/backend.server")
+			).createPostgresBackendFromEnv();
 		case "memory": {
 			if (process.env.NODE_ENV === "production") {
 				console.warn(
@@ -32,6 +36,10 @@ let backend: Promise<Backend> | undefined;
 
 /** The backend in use: one per process, shared by every request. */
 export function getBackend(): Promise<Backend> {
-	backend ??= loadBackend(serverEnv().BACKEND);
+	// A failed load is dropped, so the next request retries it.
+	backend ??= loadBackend(serverEnv().BACKEND).catch((error) => {
+		backend = undefined;
+		throw error;
+	});
 	return backend;
 }

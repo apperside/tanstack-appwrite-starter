@@ -11,10 +11,16 @@ import { aGuest, aUser } from "#/test/fixtures";
 import { renderWithRouter } from "#/test/router";
 import { ProfileSettings } from "./profile-settings";
 
-vi.mock("#/server/api/auth/auth.functions", () => ({
+vi.mock("#/server/api/auth/auth.functions", async (importOriginal) => ({
+	...(await importOriginal<
+		typeof import("#/server/api/auth/auth.functions")
+	>()),
 	getCurrentUser: vi.fn(),
 }));
-vi.mock("#/server/api/account/account.functions", () => ({
+vi.mock("#/server/api/account/account.functions", async (importOriginal) => ({
+	...(await importOriginal<
+		typeof import("#/server/api/account/account.functions")
+	>()),
 	changeName: vi.fn(),
 	changeEmail: vi.fn(),
 }));

@@ -7,10 +7,14 @@ import { getCurrentUser } from "#/server/api/auth/auth.functions";
 import { aUser } from "#/test/fixtures";
 import { Route } from "./__root";
 
-vi.mock("#/server/api/auth/auth.functions", () => ({
+vi.mock("#/server/api/auth/auth.functions", async (importOriginal) => ({
+	...(await importOriginal<
+		typeof import("#/server/api/auth/auth.functions")
+	>()),
 	getCurrentUser: vi.fn(),
 }));
-vi.mock("#/server/functions/preferences", () => ({
+vi.mock("#/server/functions/preferences", async (importOriginal) => ({
+	...(await importOriginal<typeof import("#/server/functions/preferences")>()),
 	getThemePreference: async () => "dark",
 	getLocaleHints: async () => ({ cookieLocale: "it" }),
 }));

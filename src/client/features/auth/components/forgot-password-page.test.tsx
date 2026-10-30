@@ -6,7 +6,10 @@ import { requestPasswordReset } from "#/server/api/auth/auth.functions";
 import { renderWithRouter } from "#/test/router";
 import { ForgotPasswordPage } from "./forgot-password-page";
 
-vi.mock("#/server/api/auth/auth.functions", () => ({
+vi.mock("#/server/api/auth/auth.functions", async (importOriginal) => ({
+	...(await importOriginal<
+		typeof import("#/server/api/auth/auth.functions")
+	>()),
 	getCurrentUser: vi.fn(),
 	requestPasswordReset: vi.fn(),
 }));

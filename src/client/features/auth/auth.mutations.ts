@@ -8,25 +8,13 @@ import type {
 	SignInInput,
 	SignUpInput,
 } from "#/lib/schemas/auth.schemas";
-import {
-	confirmVerification,
-	requestPasswordReset,
-	resetPassword,
-	sendVerification,
-	signIn,
-	signInAndMergeGuest,
-	signOut,
-	signOutEverywhere,
-	signUp,
-	startGuestSession,
-	upgradeGuest,
-} from "#/server/api/auth/auth.functions";
+import { api } from "#/server/api/api";
 
 declare module "tanstack-query-typed" {
 	interface AppMutationsRegistry {
-		signOut: { response: Awaited<ReturnType<typeof signOut>> };
+		signOut: { response: Awaited<ReturnType<typeof api.auth.signOut>> };
 		signOutEverywhere: {
-			response: Awaited<ReturnType<typeof signOutEverywhere>>;
+			response: Awaited<ReturnType<typeof api.auth.signOutEverywhere>>;
 		};
 		signIn: { payload: SignInInput; response: User };
 		signInAndMergeGuest: { payload: SignInInput; response: User };
@@ -35,18 +23,18 @@ declare module "tanstack-query-typed" {
 		startGuestSession: { response: User };
 		requestPasswordReset: {
 			payload: RequestResetInput;
-			response: Awaited<ReturnType<typeof requestPasswordReset>>;
+			response: Awaited<ReturnType<typeof api.auth.requestPasswordReset>>;
 		};
 		resetPassword: {
 			payload: ResetPasswordInput;
-			response: Awaited<ReturnType<typeof resetPassword>>;
+			response: Awaited<ReturnType<typeof api.auth.resetPassword>>;
 		};
 		sendVerification: {
-			response: Awaited<ReturnType<typeof sendVerification>>;
+			response: Awaited<ReturnType<typeof api.auth.sendVerification>>;
 		};
 		confirmVerification: {
 			payload: ConfirmVerificationInput;
-			response: Awaited<ReturnType<typeof confirmVerification>>;
+			response: Awaited<ReturnType<typeof api.auth.confirmVerification>>;
 		};
 	}
 }
@@ -55,13 +43,13 @@ declare module "tanstack-query-typed" {
 // Each knows who is signed in afterwards (`nextUser`), so none re-reads it.
 
 export const signOutMutation = {
-	...appMutationOptions(["signOut"], { mutationFn: () => signOut() }),
+	...appMutationOptions(["signOut"], { mutationFn: () => api.auth.signOut() }),
 	nextUser: null,
 };
 
 export const signOutEverywhereMutation = {
 	...appMutationOptions(["signOutEverywhere"], {
-		mutationFn: () => signOutEverywhere(),
+		mutationFn: () => api.auth.signOutEverywhere(),
 	}),
 	nextUser: null,
 };
@@ -70,35 +58,35 @@ const returnedUser = (user: User) => user;
 
 export const signInMutation = {
 	...appMutationOptions(["signIn"], {
-		mutationFn: (data) => signIn({ data }),
+		mutationFn: (data) => api.auth.signIn({ data }),
 	}),
 	nextUser: returnedUser,
 };
 
 export const signInAndMergeGuestMutation = {
 	...appMutationOptions(["signInAndMergeGuest"], {
-		mutationFn: (data) => signInAndMergeGuest({ data }),
+		mutationFn: (data) => api.auth.signInAndMergeGuest({ data }),
 	}),
 	nextUser: returnedUser,
 };
 
 export const signUpMutation = {
 	...appMutationOptions(["signUp"], {
-		mutationFn: (data) => signUp({ data }),
+		mutationFn: (data) => api.auth.signUp({ data }),
 	}),
 	nextUser: returnedUser,
 };
 
 export const upgradeGuestMutation = {
 	...appMutationOptions(["upgradeGuest"], {
-		mutationFn: (data) => upgradeGuest({ data }),
+		mutationFn: (data) => api.auth.upgradeGuest({ data }),
 	}),
 	nextUser: returnedUser,
 };
 
 export const startGuestSessionMutation = {
 	...appMutationOptions(["startGuestSession"], {
-		mutationFn: () => startGuestSession(),
+		mutationFn: () => api.auth.startGuestSession(),
 	}),
 	nextUser: returnedUser,
 };
@@ -106,23 +94,23 @@ export const startGuestSessionMutation = {
 /** Confirming an email changes the user (`emailVerification`): run it through `useAuthMutation`. */
 export const confirmVerificationMutation = appMutationOptions(
 	["confirmVerification"],
-	{ mutationFn: (data) => confirmVerification({ data }) },
+	{ mutationFn: (data) => api.auth.confirmVerification({ data }) },
 );
 
 // These leave the signed-in user unchanged: plain `useMutation`.
 
 export const requestPasswordResetMutation = appMutationOptions(
 	["requestPasswordReset"],
-	{ mutationFn: (data) => requestPasswordReset({ data }) },
+	{ mutationFn: (data) => api.auth.requestPasswordReset({ data }) },
 );
 
 export const resetPasswordMutation = appMutationOptions(["resetPassword"], {
-	mutationFn: (data) => resetPassword({ data }),
+	mutationFn: (data) => api.auth.resetPassword({ data }),
 });
 
 export const sendVerificationMutation = appMutationOptions(
 	["sendVerification"],
-	{ mutationFn: () => sendVerification() },
+	{ mutationFn: () => api.auth.sendVerification() },
 );
 
 /** Which form field shows a server error code; the rest are form errors. */

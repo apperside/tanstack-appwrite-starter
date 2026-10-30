@@ -14,7 +14,10 @@ import { aUser } from "#/test/fixtures";
 import { currentUserQuery } from "./auth.queries";
 import { forgetExpiredSession } from "./session-expiry";
 
-vi.mock("#/server/api/auth/auth.functions", () => ({
+vi.mock("#/server/api/auth/auth.functions", async (importOriginal) => ({
+	...(await importOriginal<
+		typeof import("#/server/api/auth/auth.functions")
+	>()),
 	getCurrentUser: vi.fn(),
 }));
 

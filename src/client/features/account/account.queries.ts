@@ -1,15 +1,15 @@
 import { appQueryOptions } from "tanstack-query-typed";
-import { listSessions } from "#/server/api/account/account.functions";
+import { api } from "#/server/api/api";
 
 declare module "tanstack-query-typed" {
 	interface AppQueriesRegistry {
 		sessions: {
-			response: Awaited<ReturnType<typeof listSessions>>;
+			response: Awaited<ReturnType<typeof api.account.listSessions>>;
 		};
 	}
 }
 
 /** The signed-in user's sessions, current first: the security settings. */
 export const sessionsQuery = appQueryOptions(["sessions"], {
-	queryFn: () => listSessions(),
+	queryFn: () => api.account.listSessions(),
 });

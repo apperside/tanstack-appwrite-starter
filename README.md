@@ -244,7 +244,7 @@ src/
     backend.ts            The `Backend` interface an adapter implements
     prefs.ts              Account preferences
   server/                 requireUser, hooks
-    api/                  Server functions per feature (`*.functions.ts` + handlers)
+    api/                  Server functions per feature (`*.functions.ts` + handlers); `api.ts` lists them all
     adapters/             One folder per backend, each implementing `Backend`
       appwrite/           Account/Users/TablesDB adapter, clients, generated types, realtime
       memory/             In-process backend for development, demos and tests
@@ -345,7 +345,7 @@ Example: a `notes` feature.
 3. **Server API** `src/server/api/notes/`:
    - `notes.handlers.server.ts`: handlers that start with `const user = await requireUser(context)` and use `context.data.notes` with `user.id`.
    - `notes.handlers.server.test.ts`: tests with `createTestContext()`.
-   - `notes.functions.ts`: one `createServerFn(...).middleware([authMiddleware]).validator(schema)` per handler, dynamically importing the handler.
+   - `notes.functions.ts`: one `createServerFn(...).middleware([authMiddleware]).validator(schema)` per handler, dynamically importing the handler. Add them to `api` in `src/server/api/api.ts`.
 4. **Client feature** `src/client/features/notes/`:
    - `notes.queries.ts`: `appQueryOptions` plus the registry entries.
    - `components/`: the page, with `useSuspenseQuery` and `useAppForm`.

@@ -9,7 +9,10 @@ import { signOutMutation } from "../auth.mutations";
 import { useAuthMutation } from "./use-auth-mutation";
 import { useCurrentUser } from "./use-current-user";
 
-vi.mock("#/server/api/auth/auth.functions", () => ({
+vi.mock("#/server/api/auth/auth.functions", async (importOriginal) => ({
+	...(await importOriginal<
+		typeof import("#/server/api/auth/auth.functions")
+	>()),
 	getCurrentUser: vi.fn(),
 	signOut: vi.fn(),
 }));

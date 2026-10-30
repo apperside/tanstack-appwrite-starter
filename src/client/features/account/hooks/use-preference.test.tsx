@@ -6,10 +6,16 @@ import { aUser } from "#/test/fixtures";
 import { renderWithRouter } from "#/test/router";
 import { useThemePreference } from "./use-preference";
 
-vi.mock("#/server/api/auth/auth.functions", () => ({
+vi.mock("#/server/api/auth/auth.functions", async (importOriginal) => ({
+	...(await importOriginal<
+		typeof import("#/server/api/auth/auth.functions")
+	>()),
 	getCurrentUser: vi.fn(),
 }));
-vi.mock("#/server/api/account/account.functions", () => ({
+vi.mock("#/server/api/account/account.functions", async (importOriginal) => ({
+	...(await importOriginal<
+		typeof import("#/server/api/account/account.functions")
+	>()),
 	updatePreferences: vi.fn(),
 }));
 vi.mock("#/client/components/ui/toast", () => ({ toast: { error: vi.fn() } }));

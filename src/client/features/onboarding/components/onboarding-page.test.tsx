@@ -9,12 +9,21 @@ import { aGuest, aUser } from "#/test/fixtures";
 import { renderWithRouter } from "#/test/router";
 import { OnboardingPage } from "./onboarding-page";
 
-vi.mock("#/server/api/auth/auth.functions", () => ({
+vi.mock("#/server/api/auth/auth.functions", async (importOriginal) => ({
+	...(await importOriginal<
+		typeof import("#/server/api/auth/auth.functions")
+	>()),
 	getCurrentUser: vi.fn(),
 }));
-vi.mock("#/server/api/onboarding/onboarding.functions", () => ({
-	completeOnboarding: vi.fn(),
-}));
+vi.mock(
+	"#/server/api/onboarding/onboarding.functions",
+	async (importOriginal) => ({
+		...(await importOriginal<
+			typeof import("#/server/api/onboarding/onboarding.functions")
+		>()),
+		completeOnboarding: vi.fn(),
+	}),
+);
 
 const onboarded = { ...DEFAULT_PREFS, onboardingCompleted: true };
 

@@ -12,7 +12,10 @@ const hydration = vi.hoisted(() => ({ done: true }));
 vi.mock("#/client/hooks/use-hydrated", () => ({
 	useHydrated: () => hydration.done,
 }));
-vi.mock("#/server/api/auth/auth.functions", () => ({
+vi.mock("#/server/api/auth/auth.functions", async (importOriginal) => ({
+	...(await importOriginal<
+		typeof import("#/server/api/auth/auth.functions")
+	>()),
 	getCurrentUser: vi.fn(),
 	resetPassword: vi.fn(),
 }));

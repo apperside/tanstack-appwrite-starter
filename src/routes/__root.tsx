@@ -15,10 +15,7 @@ import {
 	resolveThemePreference,
 	themeInitScript,
 } from "#/lib/theme";
-import {
-	getLocaleHints,
-	getThemePreference,
-} from "#/server/functions/preferences";
+import { api } from "#/server/api/api";
 import appCss from "#/styles.css?url";
 
 // DEV only: the condition is statically false in production builds, so the chunk is dropped.
@@ -45,8 +42,8 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 					await loadResources(DEFAULT_LOCALE);
 					throw error;
 				}),
-			getThemePreference(),
-			getLocaleHints(),
+			api.preferences.getThemePreference(),
+			api.preferences.getLocaleHints(),
 		]);
 		// The account's preferences win; the cookies are the first-paint cache
 		// for everyone else (R39).

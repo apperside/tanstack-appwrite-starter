@@ -1,10 +1,10 @@
 import { appQueryOptions } from "tanstack-query-typed";
-import { getCurrentUser } from "#/server/api/auth/auth.functions";
+import { api } from "#/server/api/api";
 
 declare module "tanstack-query-typed" {
 	interface AppQueriesRegistry {
 		currentUser: {
-			response: Awaited<ReturnType<typeof getCurrentUser>>;
+			response: Awaited<ReturnType<typeof api.auth.getCurrentUser>>;
 		};
 	}
 }
@@ -18,6 +18,6 @@ declare module "tanstack-query-typed" {
  * `router.invalidate()`s.
  */
 export const currentUserQuery = appQueryOptions(["currentUser"], {
-	queryFn: () => getCurrentUser(),
+	queryFn: () => api.auth.getCurrentUser(),
 	staleTime: Number.POSITIVE_INFINITY,
 });

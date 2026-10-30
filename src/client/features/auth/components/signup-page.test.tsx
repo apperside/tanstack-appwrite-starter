@@ -7,7 +7,10 @@ import { aGuest, aUser } from "#/test/fixtures";
 import { renderWithRouter } from "#/test/router";
 import { SignupPage } from "./signup-page";
 
-vi.mock("#/server/api/auth/auth.functions", () => ({
+vi.mock("#/server/api/auth/auth.functions", async (importOriginal) => ({
+	...(await importOriginal<
+		typeof import("#/server/api/auth/auth.functions")
+	>()),
 	getCurrentUser: vi.fn(),
 	signUp: vi.fn(),
 	upgradeGuest: vi.fn(),

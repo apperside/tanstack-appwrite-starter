@@ -11,11 +11,17 @@ import { renderWithRouter } from "#/test/router";
 import { appNavigation } from "./app-navigation";
 import { AppShell } from "./app-shell";
 
-vi.mock("#/server/api/auth/auth.functions", () => ({
+vi.mock("#/server/api/auth/auth.functions", async (importOriginal) => ({
+	...(await importOriginal<
+		typeof import("#/server/api/auth/auth.functions")
+	>()),
 	getCurrentUser: vi.fn(),
 	signOut: vi.fn(),
 }));
-vi.mock("#/server/api/account/account.functions", () => ({
+vi.mock("#/server/api/account/account.functions", async (importOriginal) => ({
+	...(await importOriginal<
+		typeof import("#/server/api/account/account.functions")
+	>()),
 	updatePreferences: vi.fn(),
 }));
 

@@ -1,12 +1,12 @@
 import { appMutationOptions } from "tanstack-query-typed";
 import type { CompleteOnboardingInput } from "#/lib/schemas/onboarding.schemas";
-import { completeOnboarding } from "#/server/api/onboarding/onboarding.functions";
+import { api } from "#/server/api/api";
 
 declare module "tanstack-query-typed" {
 	interface AppMutationsRegistry {
 		completeOnboarding: {
 			payload: CompleteOnboardingInput;
-			response: Awaited<ReturnType<typeof completeOnboarding>>;
+			response: Awaited<ReturnType<typeof api.onboarding.completeOnboarding>>;
 		};
 	}
 }
@@ -17,5 +17,5 @@ declare module "tanstack-query-typed" {
  */
 export const completeOnboardingMutation = appMutationOptions(
 	["completeOnboarding"],
-	{ mutationFn: (data) => completeOnboarding({ data }) },
+	{ mutationFn: (data) => api.onboarding.completeOnboarding({ data }) },
 );

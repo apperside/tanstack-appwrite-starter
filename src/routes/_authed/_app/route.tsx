@@ -2,10 +2,7 @@ import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
 import { AppShell } from "#/client/components/layout/app-shell";
 import { publicEnv } from "#/config/env";
 import { resolveGuardRedirect } from "#/lib/guards";
-import {
-	getGuestBannerDismissed,
-	getSidebarMode,
-} from "#/server/functions/preferences";
+import { api } from "#/server/api/api";
 
 export const Route = createFileRoute("/_authed/_app")({
 	beforeLoad: ({ context, location }) => {
@@ -21,8 +18,8 @@ export const Route = createFileRoute("/_authed/_app")({
 	// banner (no layout shift).
 	loader: async () => {
 		const [sidebarMode, guestBannerDismissed] = await Promise.all([
-			getSidebarMode(),
-			getGuestBannerDismissed(),
+			api.preferences.getSidebarMode(),
+			api.preferences.getGuestBannerDismissed(),
 		]);
 		return { sidebarMode, guestBannerDismissed };
 	},

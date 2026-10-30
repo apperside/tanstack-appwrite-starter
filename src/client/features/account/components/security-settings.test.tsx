@@ -15,11 +15,17 @@ import { aGuest, aUser } from "#/test/fixtures";
 import { renderWithRouter } from "#/test/router";
 import { SecuritySettings } from "./security-settings";
 
-vi.mock("#/server/api/auth/auth.functions", () => ({
+vi.mock("#/server/api/auth/auth.functions", async (importOriginal) => ({
+	...(await importOriginal<
+		typeof import("#/server/api/auth/auth.functions")
+	>()),
 	getCurrentUser: vi.fn(),
 	signOutEverywhere: vi.fn(),
 }));
-vi.mock("#/server/api/account/account.functions", () => ({
+vi.mock("#/server/api/account/account.functions", async (importOriginal) => ({
+	...(await importOriginal<
+		typeof import("#/server/api/account/account.functions")
+	>()),
 	changePassword: vi.fn(),
 	listSessions: vi.fn(),
 }));

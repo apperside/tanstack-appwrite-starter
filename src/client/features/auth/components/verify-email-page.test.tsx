@@ -14,7 +14,10 @@ import { aUser } from "#/test/fixtures";
 import { renderWithRouter } from "#/test/router";
 import { VerifyEmailPage } from "./verify-email-page";
 
-vi.mock("#/server/api/auth/auth.functions", () => ({
+vi.mock("#/server/api/auth/auth.functions", async (importOriginal) => ({
+	...(await importOriginal<
+		typeof import("#/server/api/auth/auth.functions")
+	>()),
 	getCurrentUser: vi.fn(),
 	confirmVerification: vi.fn(),
 	sendVerification: vi.fn(),

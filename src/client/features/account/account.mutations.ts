@@ -5,30 +5,25 @@ import type {
 	ChangePasswordInput,
 	UpdatePreferencesInput,
 } from "#/lib/schemas/account.schemas";
-import {
-	changeEmail,
-	changeName,
-	changePassword,
-	updatePreferences,
-} from "#/server/api/account/account.functions";
+import { api } from "#/server/api/api";
 
 declare module "tanstack-query-typed" {
 	interface AppMutationsRegistry {
 		updatePreferences: {
 			payload: UpdatePreferencesInput;
-			response: Awaited<ReturnType<typeof updatePreferences>>;
+			response: Awaited<ReturnType<typeof api.account.updatePreferences>>;
 		};
 		changeName: {
 			payload: ChangeNameInput;
-			response: Awaited<ReturnType<typeof changeName>>;
+			response: Awaited<ReturnType<typeof api.account.changeName>>;
 		};
 		changeEmail: {
 			payload: ChangeEmailInput;
-			response: Awaited<ReturnType<typeof changeEmail>>;
+			response: Awaited<ReturnType<typeof api.account.changeEmail>>;
 		};
 		changePassword: {
 			payload: ChangePasswordInput;
-			response: Awaited<ReturnType<typeof changePassword>>;
+			response: Awaited<ReturnType<typeof api.account.changePassword>>;
 		};
 	}
 }
@@ -36,20 +31,20 @@ declare module "tanstack-query-typed" {
 /** Optimistic: run it through `usePreference`, which owns the cache and cookies. */
 export const updatePreferencesMutation = appMutationOptions(
 	["updatePreferences"],
-	{ mutationFn: (data) => updatePreferences({ data }) },
+	{ mutationFn: (data) => api.account.updatePreferences({ data }) },
 );
 
 // These change the account: run them through `useAuthMutation`, which re-reads
 // the user (they return `{ ok: true }`, not the user).
 
 export const changeNameMutation = appMutationOptions(["changeName"], {
-	mutationFn: (data) => changeName({ data }),
+	mutationFn: (data) => api.account.changeName({ data }),
 });
 
 export const changeEmailMutation = appMutationOptions(["changeEmail"], {
-	mutationFn: (data) => changeEmail({ data }),
+	mutationFn: (data) => api.account.changeEmail({ data }),
 });
 
 export const changePasswordMutation = appMutationOptions(["changePassword"], {
-	mutationFn: (data) => changePassword({ data }),
+	mutationFn: (data) => api.account.changePassword({ data }),
 });

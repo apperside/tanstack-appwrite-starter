@@ -4,7 +4,10 @@ import { axe } from "vitest-axe";
 import { renderWithRouter } from "#/test/router";
 import { SettingsLayout } from "./settings-layout";
 
-vi.mock("#/server/api/auth/auth.functions", () => ({
+vi.mock("#/server/api/auth/auth.functions", async (importOriginal) => ({
+	...(await importOriginal<
+		typeof import("#/server/api/auth/auth.functions")
+	>()),
 	getCurrentUser: vi.fn(),
 }));
 

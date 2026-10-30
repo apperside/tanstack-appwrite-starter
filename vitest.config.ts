@@ -42,6 +42,8 @@ export default defineConfig({
 				"src/test/**",
 				"**/*.test.*",
 				"src/routes/**",
+				// Needs a real server: checked by the manual smoke test.
+				"src/server/adapters/postgres/db.server.ts",
 				// Vendored shadcn kit (Task 23): tested through the screens that use it.
 				"src/client/components/ui/**",
 			],

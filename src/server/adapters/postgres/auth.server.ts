@@ -1,21 +1,27 @@
 import { randomUUID } from "node:crypto";
-import { and, eq, lte, sql } from "drizzle-orm";
+import { and, eq, lte, ne, sql } from "drizzle-orm";
 import type { AdminAuth, AuthService, SessionAuth } from "#/core/auth/ports";
-import type { AuthSession, DeviceSession, User } from "#/core/auth/types";
+import type {
+	AuthSession,
+	DeviceSession,
+	EmailLinkParams,
+	User,
+} from "#/core/auth/types";
 import type { RequestInfo } from "#/core/backend";
+import { DEFAULT_PREFS } from "#/core/prefs";
 import { AppError } from "#/lib/errors";
-import type { SendEmail } from "../shared/mail/mail";
+import type { EmailPurpose, SendEmail } from "../shared/mail/mail";
 import {
 	hashPassword,
 	type ScryptCost,
 	verifyPassword,
 } from "../shared/passwords.server";
-import { hashToken, newToken } from "../shared/tokens.server";
-import { SESSION_TTL } from "../shared/ttl";
+import { hashToken, linkTo, newToken } from "../shared/tokens.server";
+import { RECOVERY_TTL, SESSION_TTL, VERIFICATION_TTL } from "../shared/ttl";
 import { describeUserAgent } from "../shared/user-agent";
 import type { PostgresDb } from "./db.server";
 import { translateErrors } from "./errors";
-import { sessions, users } from "./schema";
+import { emailLinks, sessions, users } from "./schema";
 
 export type PostgresAuthOptions = {
 	db: PostgresDb;
@@ -30,10 +36,6 @@ type UserRow = typeof users.$inferSelect;
 type Tx = Parameters<Parameters<PostgresDb["transaction"]>[0]>[0];
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-const notImplemented = async () => {
-	throw new Error("not implemented");
-};
 
 const byEmail = (email: string) => sql`lower(${users.email}) = lower(${email})`;
 
@@ -57,6 +59,7 @@ function toUser(row: UserRow): User {
 export function createPostgresAuth({
 	db,
 	now,
+	sendEmail,
 	passwordCost,
 }: PostgresAuthOptions) {
 	const hash = (password: string) => hashPassword(password, passwordCost);
@@ -104,6 +107,63 @@ export function createPostgresAuth({
 		return tx.insert(users).values(row).returning({ id: users.id });
 	}
 
+	/** Stores a link for `user` (hashed) and emails it. */
+	async function sendLink(
+		user: UserRow,
+		purpose: EmailPurpose,
+		redirectUrl: string,
+	) {
+		const token = newToken();
+		const ttl = purpose === "recovery" ? RECOVERY_TTL : VERIFICATION_TTL;
+		const email = user.email as string;
+		await db.insert(emailLinks).values({
+			tokenHash: hashToken(token),
+			purpose,
+			userId: user.id,
+			email,
+			expiresAt: new Date(now() + ttl),
+		});
+		await sendEmail({
+			to: email,
+			purpose,
+			url: linkTo(redirectUrl, { token }),
+			locale: user.prefs.locale ?? DEFAULT_PREFS.locale,
+		});
+	}
+
+	/**
+	 * Consumes a link, valid once and before it expires, and returns its user.
+	 * One `delete … returning`, so concurrent consumers cannot both win.
+	 */
+	async function useLink(
+		tx: Tx,
+		link: EmailLinkParams,
+		purpose: EmailPurpose,
+	): Promise<UserRow> {
+		if (!link.token) throw new AppError("INVALID_TOKEN");
+		const [stored] = await tx
+			.delete(emailLinks)
+			.where(
+				and(
+					eq(emailLinks.tokenHash, hashToken(link.token)),
+					eq(emailLinks.purpose, purpose),
+				),
+			)
+			.returning();
+		const [user] = stored
+			? await tx.select().from(users).where(eq(users.id, stored.userId))
+			: [];
+		if (
+			!stored ||
+			!user ||
+			stored.expiresAt.getTime() <= now() ||
+			stored.email !== user.email
+		) {
+			throw new AppError("INVALID_TOKEN");
+		}
+		return user;
+	}
+
 	function forSession(token: string): SessionAuth {
 		const tokenHash = hashToken(token);
 
@@ -120,6 +180,13 @@ export function createPostgresAuth({
 				return found;
 			}
 			throw new AppError("UNAUTHENTICATED");
+		}
+
+		/** `current()`, for a registered user only (`FORBIDDEN` for a guest). */
+		async function registered() {
+			const found = await current();
+			if (found.user.email === null) throw new AppError("FORBIDDEN");
+			return found;
 		}
 
 		return translateErrors<SessionAuth>({
@@ -165,10 +232,74 @@ export function createPostgresAuth({
 					.returning({ prefs: users.prefs });
 				return row?.prefs ?? {};
 			},
-			updateEmail: notImplemented,
-			updatePassword: notImplemented,
-			sendVerification: notImplemented,
-			upgradeGuest: notImplemented,
+			// Like Appwrite: a guest sets its first password here, anyone else
+			// confirms the current one.
+			updateEmail: async ({ email, password }) => {
+				const { user } = await current();
+				if (
+					user.passwordHash &&
+					!(await verifyPassword(password, user.passwordHash))
+				) {
+					throw new AppError("INVALID_CREDENTIALS");
+				}
+				const newHash = user.passwordHash ? null : await hash(password);
+				await db.transaction(async (tx) => {
+					await tx
+						.update(users)
+						.set({
+							email,
+							emailVerified: false,
+							passwordHash: sql`coalesce(${users.passwordHash}, ${newHash})`,
+						})
+						.where(eq(users.id, user.id));
+					await tx
+						.delete(emailLinks)
+						.where(
+							and(
+								eq(emailLinks.userId, user.id),
+								eq(emailLinks.purpose, "verification"),
+							),
+						);
+				});
+			},
+			updatePassword: async ({ password, oldPassword }) => {
+				const { session, user } = await registered();
+				if (!(await verifyPassword(oldPassword, user.passwordHash))) {
+					throw new AppError("INVALID_CREDENTIALS");
+				}
+				const passwordHash = await hash(password);
+				await db.transaction(async (tx) => {
+					await tx
+						.update(users)
+						.set({ passwordHash })
+						.where(eq(users.id, user.id));
+					await tx
+						.delete(sessions)
+						.where(
+							and(eq(sessions.userId, user.id), ne(sessions.id, session.id)),
+						);
+				});
+			},
+			sendVerification: async ({ redirectUrl }) => {
+				const { user } = await registered();
+				await sendLink(user, "verification", redirectUrl);
+			},
+			// The account changes in place, so its session simply carries on.
+			upgradeGuest: async ({ name, email, password }) => {
+				const { session, user } = await current();
+				if (user.email !== null) throw new AppError("FORBIDDEN");
+				const passwordHash = await hash(password);
+				await db
+					.update(users)
+					.set({ name, email, emailVerified: false, passwordHash })
+					.where(eq(users.id, user.id));
+				return {
+					id: session.id,
+					userId: user.id,
+					token,
+					expiresAt: session.expiresAt.toISOString(),
+				};
+			},
 		});
 	}
 
@@ -221,9 +352,31 @@ export function createPostgresAuth({
 					const [user] = await createUser(tx, {});
 					return openSession(tx, user?.id as string, userAgent);
 				}),
-			requestPasswordReset: notImplemented,
-			resetPassword: notImplemented,
-			confirmVerification: notImplemented,
+			requestPasswordReset: async ({ email, redirectUrl }) => {
+				const [user] = await db.select().from(users).where(byEmail(email));
+				if (!user) throw new AppError("NOT_FOUND");
+				await sendLink(user, "recovery", redirectUrl);
+			},
+			resetPassword: async ({ link, password }) => {
+				const passwordHash = await hash(password);
+				await db.transaction(async (tx) => {
+					const user = await useLink(tx, link, "recovery");
+					await tx
+						.update(users)
+						.set({ passwordHash })
+						.where(eq(users.id, user.id));
+					await tx.delete(sessions).where(eq(sessions.userId, user.id));
+				});
+			},
+			confirmVerification: async (link) => {
+				await db.transaction(async (tx) => {
+					const user = await useLink(tx, link, "verification");
+					await tx
+						.update(users)
+						.set({ emailVerified: true })
+						.where(eq(users.id, user.id));
+				});
+			},
 		});
 		// `session` is not async: its methods are wrapped instead.
 		return { ...service, session: forSession, admin };

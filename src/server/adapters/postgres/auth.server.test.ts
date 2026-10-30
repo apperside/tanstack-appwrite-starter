@@ -32,6 +32,7 @@ async function harness(
 	}).forRequest({ userAgent });
 	return {
 		auth,
+		emails,
 		lastLink: async (email: string, purpose: AuthEmail["purpose"]) => {
 			const sent = [...emails]
 				.reverse()
@@ -135,5 +136,126 @@ describe("postgres auth", () => {
 				auth.signIn({ email: ann.email, password }),
 			).rejects.toMatchObject({ code: "INVALID_CREDENTIALS" });
 		}
+	});
+
+	it("stores no link token in clear", async () => {
+		const { auth, lastLink } = await harness();
+		const { token } = await auth.signUp(ann);
+		await auth
+			.session(token)
+			.sendVerification({ redirectUrl: "https://app.test/verify-email" });
+		const link = await lastLink(ann.email, "verification");
+		const { rows } = await testDb.client.query<{ token_hash: string }>(
+			"select token_hash from email_links",
+		);
+		expect(rows).toEqual([{ token_hash: hashToken(link.token as string) }]);
+	});
+
+	it("voids a verification link once the email changes", async () => {
+		const { auth, lastLink } = await harness();
+		const { token } = await auth.signUp(ann);
+		const session = auth.session(token);
+		await session.sendVerification({
+			redirectUrl: "https://app.test/verify-email",
+		});
+		const link = await lastLink(ann.email, "verification");
+		await session.updateEmail({
+			email: "new@example.test",
+			password: ann.password,
+		});
+		await expect(auth.confirmVerification(link)).rejects.toMatchObject({
+			code: "INVALID_TOKEN",
+		});
+	});
+
+	it("lets one of two concurrent consumers use a link", async () => {
+		const { auth, lastLink } = await harness();
+		const { token } = await auth.signUp(ann);
+		await auth
+			.session(token)
+			.sendVerification({ redirectUrl: "https://app.test/verify-email" });
+		const link = await lastLink(ann.email, "verification");
+		const results = await Promise.allSettled([
+			auth.confirmVerification(link),
+			auth.confirmVerification(link),
+		]);
+		expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+		const rejected = results.filter((r) => r.status === "rejected");
+		expect(rejected[0]?.reason).toMatchObject({ code: "INVALID_TOKEN" });
+	});
+
+	it("expires recovery links after an hour", async () => {
+		let now = Date.parse("2026-01-01T00:00:00Z");
+		const { auth, lastLink } = await harness(() => now);
+		await auth.signUp(ann);
+		await auth.requestPasswordReset({
+			email: ann.email,
+			redirectUrl: "https://app.test/reset-password",
+		});
+		const link = await lastLink(ann.email, "recovery");
+		now += 61 * 60_000;
+		await expect(
+			auth.resetPassword({ link, password: "newpassword1" }),
+		).rejects.toMatchObject({ code: "INVALID_TOKEN" });
+	});
+
+	it("gives a guest its first password through updateEmail", async () => {
+		const { auth } = await harness();
+		const guest = await auth.startGuest();
+		await auth.session(guest.token).updateEmail({
+			email: ann.email,
+			password: ann.password,
+		});
+		const signedIn = await auth.signIn({
+			email: ann.email,
+			password: ann.password,
+		});
+		expect(signedIn.userId).toBe(guest.userId);
+		expect((await auth.session(guest.token).getUser()).isGuest).toBe(false);
+	});
+
+	it("keeps the guest intact when the upgrade email is taken", async () => {
+		const { auth } = await harness();
+		await auth.signUp(ann);
+		const guest = await auth.startGuest();
+		await expect(
+			auth.session(guest.token).upgradeGuest(ann),
+		).rejects.toMatchObject({ code: "EMAIL_TAKEN" });
+		const { rows } = await testDb.client.query(
+			"select email, password_hash from users where email is null",
+		);
+		expect(rows).toEqual([{ email: null, password_hash: null }]);
+	});
+
+	it("lets only a guest upgrade, and only a registered user verify or change password", async () => {
+		const { auth } = await harness();
+		const user = await auth.signUp(ann);
+		await expect(
+			auth
+				.session(user.token)
+				.upgradeGuest({ ...ann, email: "x@example.test" }),
+		).rejects.toMatchObject({ code: "FORBIDDEN" });
+		const guest = await auth.startGuest();
+		await expect(
+			auth
+				.session(guest.token)
+				.sendVerification({ redirectUrl: "https://app.test/verify-email" }),
+		).rejects.toMatchObject({ code: "FORBIDDEN" });
+		await expect(
+			auth
+				.session(guest.token)
+				.updatePassword({ password: "newpassword1", oldPassword: "x" }),
+		).rejects.toMatchObject({ code: "FORBIDDEN" });
+	});
+
+	it("emails the link in the user's locale", async () => {
+		const { auth, emails } = await harness();
+		const { token } = await auth.signUp(ann);
+		const session = auth.session(token);
+		await session.updatePrefs({ locale: "it" });
+		await session.sendVerification({
+			redirectUrl: "https://app.test/verify-email",
+		});
+		expect(emails.at(-1)?.locale).toBe("it");
 	});
 });

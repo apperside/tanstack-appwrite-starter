@@ -1,7 +1,7 @@
 import { type Account, Client, type TablesDB, type Users } from "node-appwrite";
 import { type Mock, vi } from "vitest";
-import type { AppClient } from "#/adapters/appwrite/app-models";
-import { AdminTables, AppTables } from "#/adapters/appwrite/app-tables";
+import type { AppClient } from "#/server/adapters/appwrite/app-models";
+import { AdminTables, AppTables } from "#/server/adapters/appwrite/app-tables";
 
 /*
  * Typed fakes of the Appwrite SDK services, for the Appwrite adapter's tests.

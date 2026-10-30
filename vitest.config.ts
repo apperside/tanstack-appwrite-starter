@@ -38,23 +38,26 @@ export default defineConfig({
 			include: ["src/**/*.{ts,tsx}"],
 			exclude: [
 				"src/routeTree.gen.ts",
-				"src/adapters/appwrite/generated/**",
+				"src/server/adapters/appwrite/generated/**",
 				"src/test/**",
 				"**/*.test.*",
 				"src/routes/**",
 				// Vendored shadcn kit (Task 23): tested through the screens that use it.
-				"src/components/ui/**",
+				"src/client/components/ui/**",
 			],
 			// Per-glob thresholds; globs matching no files are skipped by Vitest.
 			thresholds: {
 				"src/lib/**": { lines: 90, branches: 90 },
-				"src/server/**": { lines: 90, branches: 90 },
 				"src/core/**": { lines: 90, branches: 90 },
-				"src/adapters/**": { lines: 90, branches: 85 },
-				"src/features/**/*.functions.ts": { lines: 90, branches: 90 },
-				"src/features/**/*.handlers.server.ts": { lines: 90, branches: 90 },
-				"src/components/**": { lines: 80, branches: 80 },
-				"src/features/**/components/**": { lines: 80, branches: 80 },
+				// The API (functions and handlers), context, middlewares and cookies.
+				"src/server/{api,context,cookies,functions,middlewares,utils}/**": {
+					lines: 90,
+					branches: 90,
+				},
+				"src/server/*.ts": { lines: 90, branches: 90 },
+				"src/server/adapters/**": { lines: 90, branches: 85 },
+				"src/client/components/**": { lines: 80, branches: 80 },
+				"src/client/features/**/components/**": { lines: 80, branches: 80 },
 			},
 		},
 	},

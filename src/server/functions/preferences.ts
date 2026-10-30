@@ -13,7 +13,9 @@ import { parseThemeCookie } from "#/lib/theme";
 /* v8 ignore start -- createIsomorphicFn wiring: both branches delegate to tested functions */
 const cookieHeader = createIsomorphicFn()
 	.server(async () =>
-		(await import("./preference-cookies.server")).requestCookieHeader(),
+		(
+			await import("#/server/cookies/preference-cookies.server")
+		).requestCookieHeader(),
 	)
 	.client(async () => document.cookie);
 
@@ -24,7 +26,9 @@ const cookieHeader = createIsomorphicFn()
  */
 export const getLocaleHints = createIsomorphicFn()
 	.server(async () =>
-		(await import("./preference-cookies.server")).readLocaleHints(),
+		(
+			await import("#/server/cookies/preference-cookies.server")
+		).readLocaleHints(),
 	)
 	.client(async () => clientLocaleHints(document));
 /* v8 ignore stop */

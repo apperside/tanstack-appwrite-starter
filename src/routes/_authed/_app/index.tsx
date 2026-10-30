@@ -1,8 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
-import { pageClassName } from "#/components/layout/page";
-import { Card, CardDescription, CardHeader } from "#/components/ui/card";
-import { useCurrentUser } from "#/features/auth/use-current-user";
+import { pageClassName } from "#/client/components/layout/page";
+import { Card, CardDescription, CardHeader } from "#/client/components/ui/card";
+import { useCurrentUser } from "#/client/features/auth/hooks/use-current-user";
 
 export const Route = createFileRoute("/_authed/_app/")({ component: Home });
 

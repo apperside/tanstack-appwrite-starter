@@ -4,10 +4,10 @@ import {
 } from "@tanstack/react-router";
 import { setupRouterSsrQueryIntegration } from "@tanstack/react-router-ssr-query";
 import { asTypedQueryClient } from "tanstack-query-typed";
-import { NotFound } from "./components/layout/not-found";
-import { PageSkeleton } from "./components/layout/page-skeleton";
-import { RouteError } from "./components/layout/route-error";
-import { forgetExpiredSession } from "./features/auth/session-expiry";
+import { NotFound } from "./client/components/layout/not-found";
+import { PageSkeleton } from "./client/components/layout/page-skeleton";
+import { RouteError } from "./client/components/layout/route-error";
+import { forgetExpiredSession } from "./client/features/auth/session-expiry";
 import { loadedResources, primeResources, type Resources } from "./i18n/i18n";
 import type { Locale } from "./i18n/locale";
 import { createQueryClient } from "./lib/query-client";

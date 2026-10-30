@@ -13,7 +13,7 @@ export async function loadBackend(name: BackendName): Promise<Backend> {
 	switch (name) {
 		case "appwrite":
 			return (
-				await import("#/adapters/appwrite/backend.server")
+				await import("#/server/adapters/appwrite/backend.server")
 			).createAppwriteBackend();
 		case "memory": {
 			if (process.env.NODE_ENV === "production") {
@@ -22,7 +22,7 @@ export async function loadBackend(name: BackendName): Promise<Backend> {
 				);
 			}
 			return (
-				await import("#/adapters/memory/backend.server")
+				await import("#/server/adapters/memory/backend.server")
 			).createMemoryBackend();
 		}
 	}

@@ -1,7 +1,7 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
-import { signupSearchSchema } from "#/features/auth/auth.schemas";
-import { SignupPage } from "#/features/auth/components/signup-page";
+import { SignupPage } from "#/client/features/auth/components/signup-page";
 import { isGuest } from "#/lib/guards";
+import { signupSearchSchema } from "#/lib/schemas/auth.schemas";
 
 export const Route = createFileRoute("/_public/signup")({
 	validateSearch: signupSearchSchema,

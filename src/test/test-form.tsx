@@ -3,9 +3,9 @@ import {
 	schemaValidators,
 	useAppForm,
 	withServerErrors,
-} from "#/components/form/form-kit";
-import { emailSchema, passwordSchema } from "#/features/auth/auth.schemas";
+} from "#/client/components/form/form-kit";
 import type { AppErrorCode } from "#/lib/errors";
+import { emailSchema, passwordSchema } from "#/lib/schemas/auth.schemas";
 
 const schema = z.object({ email: emailSchema, password: passwordSchema });
 

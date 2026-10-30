@@ -1,18 +1,20 @@
 import { QueryClient } from "@tanstack/react-query";
 import { asTypedQueryClient } from "tanstack-query-typed";
 import { describe, expect, it, vi } from "vitest";
-import { getCurrentUser } from "#/features/auth/auth.functions";
 import { loadedResources } from "#/i18n/i18n";
 import { AppError } from "#/lib/errors";
+import { getCurrentUser } from "#/server/api/auth/auth.functions";
 import { aUser } from "#/test/fixtures";
 import { Route } from "./__root";
 
-vi.mock("#/features/auth/auth.functions", () => ({ getCurrentUser: vi.fn() }));
-vi.mock("#/server/preferences", () => ({
+vi.mock("#/server/api/auth/auth.functions", () => ({
+	getCurrentUser: vi.fn(),
+}));
+vi.mock("#/server/functions/preferences", () => ({
 	getThemePreference: async () => "dark",
 	getLocaleHints: async () => ({ cookieLocale: "it" }),
 }));
-vi.mock("../styles.css?url", () => ({ default: "/styles.css" }));
+vi.mock("#/styles.css?url", () => ({ default: "/styles.css" }));
 
 type Hook = (args: unknown) => Promise<Record<string, unknown>>;
 

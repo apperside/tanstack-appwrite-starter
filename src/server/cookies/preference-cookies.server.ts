@@ -8,7 +8,7 @@ import { LOCALE_COOKIE, type LocaleSources } from "#/i18n/locale";
 import { ONE_YEAR_SECONDS, readCookie } from "#/lib/cookies";
 import { GUEST_BANNER_COOKIE } from "#/lib/guest-banner";
 import { THEME_COOKIE } from "#/lib/theme";
-import type { PreferenceCookies } from "./context";
+import type { PreferenceCookies } from "#/server/context/context.types";
 import { isSecure } from "./session-cookie.server";
 
 /** Readable by the client (no httpOnly): the theme script and i18n detection use them. */

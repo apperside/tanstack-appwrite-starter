@@ -1,9 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { loadBackend } from "./backend.server";
+import { getBackend, loadBackend } from "./backend.server";
 
-vi.mock("#/adapters/appwrite/backend.server", () => ({
+vi.mock("#/server/adapters/appwrite/backend.server", () => ({
 	createAppwriteBackend: () => ({ name: "appwrite" }),
 }));
+vi.mock("#/config/env", () => ({ serverEnv: () => ({ BACKEND: "appwrite" }) }));
 
 describe("loadBackend", () => {
 	afterEach(() => vi.unstubAllEnvs());
@@ -25,5 +26,13 @@ describe("loadBackend", () => {
 			expect.stringContaining("BACKEND=memory"),
 		);
 		warn.mockRestore();
+	});
+});
+
+describe("getBackend", () => {
+	it("loads the adapter named by BACKEND once, shared by every request", async () => {
+		const first = getBackend();
+		expect(getBackend()).toBe(first);
+		await expect(first).resolves.toEqual({ name: "appwrite" });
 	});
 });

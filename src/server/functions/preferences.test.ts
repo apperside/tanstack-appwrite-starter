@@ -7,7 +7,7 @@ import {
 
 // Outside Start's compiler `createIsomorphicFn` runs its server branch.
 const header = vi.hoisted(() => ({ value: "" }));
-vi.mock("./preference-cookies.server", () => ({
+vi.mock("#/server/cookies/preference-cookies.server", () => ({
 	requestCookieHeader: () => header.value,
 }));
 

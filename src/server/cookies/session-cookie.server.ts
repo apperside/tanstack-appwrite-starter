@@ -4,7 +4,7 @@ import {
 	setCookie,
 } from "@tanstack/react-start/server";
 import { serverEnv } from "#/config/env";
-import type { SessionCookie } from "./context";
+import type { SessionCookie } from "#/server/context/context.types";
 
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
 

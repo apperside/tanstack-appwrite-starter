@@ -4,10 +4,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AuthService, SessionAuth } from "#/core/auth/ports";
 import type { Backend } from "#/core/backend";
 import { AppError } from "#/lib/errors";
+import type { SessionCookie } from "#/server/context/context.types";
 import { aSession, aUser } from "#/test/fixtures";
+import { buildServerContext } from "../context/context.server";
 import { authMiddleware } from "./auth-middleware";
-import { buildServerContext } from "./auth-middleware.server";
-import type { SessionCookie } from "./context";
 
 let hops = 0;
 vi.mock("@tanstack/react-start/server", () => ({
@@ -17,16 +17,16 @@ vi.mock("@tanstack/react-start/server", () => ({
 vi.mock("#/config/env", () => ({
 	serverEnv: () => ({ TRUSTED_PROXY_HOPS: hops, APP_URL: "https://app.test" }),
 }));
-vi.mock("./session-cookie.server", () => ({
+vi.mock("#/server/cookies/session-cookie.server", () => ({
 	requestSessionCookie: () => ({ read: () => "secret" }),
 }));
-vi.mock("./preference-cookies.server", () => ({
+vi.mock("#/server/cookies/preference-cookies.server", () => ({
 	requestPreferenceCookies: () => ({}),
 	readLocaleHints: () => ({ acceptLanguage: "it-IT,it;q=0.9" }),
 	requestCookieHeader: () => "theme=dark",
 }));
 const backendAuth = vi.hoisted(() => vi.fn());
-vi.mock("./backend.server", () => ({
+vi.mock("#/server/backend.server", () => ({
 	getBackend: async () => ({ auth: backendAuth, data: {} }),
 }));
 

@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { PageSkeleton } from "#/components/layout/page-skeleton";
-import { emailLinkSearchSchema } from "#/features/auth/auth.schemas";
-import { ResetPasswordPage } from "#/features/auth/components/reset-password-page";
+import { PageSkeleton } from "#/client/components/layout/page-skeleton";
+import { ResetPasswordPage } from "#/client/features/auth/components/reset-password-page";
+import { emailLinkSearchSchema } from "#/lib/schemas/auth.schemas";
 
 // Top-level and unguarded: a recovery link works whether or not anyone is signed in.
 export const Route = createFileRoute("/reset-password")({

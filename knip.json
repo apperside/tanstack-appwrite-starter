@@ -7,10 +7,10 @@
 		"scripts/*.ts",
 		// shadcn kit: each file keeps its full component API (unused parts tree-shake away).
 		// Entries, not ignores, so their deps still count as used.
-		"src/components/ui/*.tsx"
+		"src/client/components/ui/*.tsx"
 	],
 	"project": ["src/**/*.{ts,tsx}", "scripts/**/*.ts", "*.ts"],
-	"ignore": ["src/adapters/appwrite/generated/**", "src/routeTree.gen.ts"],
+	"ignore": ["src/server/adapters/appwrite/generated/**", "src/routeTree.gen.ts"],
 	"ignoreDependencies": [
 		// Referenced from styles.css only (knip does not follow CSS).
 		"@fontsource-variable/inter",

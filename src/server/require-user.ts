@@ -1,7 +1,7 @@
 import type { User } from "#/core/auth/types";
 import { AppError } from "#/lib/errors";
 import { isGuest } from "#/lib/guards";
-import type { ServerContext } from "./context";
+import type { ServerContext } from "./context/context.types";
 
 /** The signed-in user (a guest too). A stale cookie is cleared by `getUser`, which then reports no user. */
 export async function requireUser({

@@ -1,6 +1,6 @@
 import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
-import { AuthFrame } from "#/components/layout/auth-layout";
-import { PageSkeleton } from "#/components/layout/page-skeleton";
+import { AuthFrame } from "#/client/components/layout/auth-layout";
+import { PageSkeleton } from "#/client/components/layout/page-skeleton";
 import { publicEnv } from "#/config/env";
 import { resolveGuardRedirect } from "#/lib/guards";
 

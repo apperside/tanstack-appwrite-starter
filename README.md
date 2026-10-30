@@ -228,25 +228,34 @@ src/
       _app/               App zone (shell): home, settings/*
     reset-password.tsx    Email-link pages work signed in or out
     verify-email.tsx
-  features/               One folder per feature
-    auth/                 Platform feature: sessions, guest, recovery, verification
-    account/              Profile, security, sessions, preferences
-    onboarding/
-  core/                   The backend-neutral model: no vendor imports
+  client/                 Everything that renders
+    features/             UI per feature: pages, queries, mutations, hooks
+      auth/               Sessions, guest, recovery, verification
+      account/            Profile, security, sessions, preferences
+      onboarding/
+    components/
+      ui/                 shadcn/ui components
+      form/               Form kit (useAppForm, fields, errors)
+      layout/             App shell, sidebar, auth layout, error states
+    hooks/                Shared React hooks
+  core/                   The backend-neutral model, shared by client and server: no vendor imports
     auth/                 User and session types, the auth ports, their contract tests
     data/                 One repository port per table, pagination, contract tests
     backend.ts            The `Backend` interface an adapter implements
     prefs.ts              Account preferences
-  adapters/               One folder per backend, each implementing `Backend`
-    appwrite/             Account/Users/TablesDB adapter, clients, generated types, realtime
-    memory/               In-process backend for development, demos and tests
-  server/                 Middleware, cookies, rate limiter, requireUser, hooks
+  server/                 requireUser, hooks
+    api/                  Server functions per feature (`*.functions.ts` + handlers)
+    adapters/             One folder per backend, each implementing `Backend`
+      appwrite/           Account/Users/TablesDB adapter, clients, generated types, realtime
+      memory/             In-process backend for development, demos and tests
+    context/              The per-request server context: its types and how it is built
+    middlewares/          Auth (puts the context on server functions), CSRF, compression
+    functions/            Isomorphic preference reads for the routes
+    cookies/              Session and preference cookies
+    utils/                Rate limiter, client IP, app links, account prefs
     backend.server.ts     Picks the adapter named by `BACKEND`
-  lib/                    Pure logic: guards, errors, redirect, theme, query client
-  components/
-    ui/                   shadcn/ui components
-    form/                 Form kit (useAppForm, fields, errors)
-    layout/               App shell, sidebar, auth layout, error states
+  lib/                    Pure logic shared by both sides: guards, errors, redirect, theme, query client
+    schemas/              Zod schemas: the forms and the server-function validators
   i18n/                   i18next setup, locale resolution, en/it JSON
   test/                   Test kit: fake server context, fixtures, render helpers
   config/env.ts           Validated environment
@@ -280,7 +289,7 @@ In short:
 
 ## Backends
 
-The app never imports a vendor SDK outside `src/adapters/`. Everything it needs from a backend is a port in `src/core/`:
+The app never imports a vendor SDK outside `src/server/adapters/`. Everything it needs from a backend is a port in `src/core/`:
 
 - **`AuthService` / `SessionAuth` / `AdminAuth`** (`src/core/auth/ports.ts`): sign-up, sign-in, guests and their upgrade, sessions, email and password changes, emailed links, preferences, and deleting users or sessions. Each method documents the `AppError` codes it may reject with.
 - **Repositories** (`src/core/data/`): one per table, e.g. `TodoRepository`. They take the owner's id and check ownership themselves, so they don't depend on a backend's permission model.
@@ -303,8 +312,8 @@ Emailed links are opaque: the backend appends its credential to the URL it is gi
 
 **Adding a backend**
 
-1. Create `src/adapters/<name>/` with a `createXBackend(): Backend` that implements the ports (start from `src/adapters/memory/`, the smallest complete one).
-2. Run the contract suites against it, the same way `src/adapters/memory/backend.server.test.ts` does: `describeAuthContract("<name>", ...)` and `describeTodosContract("<name>", ...)`. They pin the behavior every adapter must share.
+1. Create `src/server/adapters/<name>/` with a `createXBackend(): Backend` that implements the ports (start from `src/server/adapters/memory/`, the smallest complete one).
+2. Run the contract suites against it, the same way `src/server/adapters/memory/backend.server.test.ts` does: `describeAuthContract("<name>", ...)` and `describeTodosContract("<name>", ...)`. They pin the behavior every adapter must share.
 3. Add the name to `BACKENDS` in `src/config/env.ts` and a case in `src/server/backend.server.ts`. Each adapter is imported on demand, so a server only loads the one it runs.
 
 ---
@@ -330,18 +339,19 @@ Emailed links are opaque: the backend appends its credential to the URL it is gi
 Example: a `notes` feature.
 
 1. **Repository.** Describe the table in `src/core/data/notes.ts` (`Note` type and `NoteRepository` port, scoped by owner like `TodoRepository`), add a contract suite next to it, and add it to `AppData` in `src/core/backend.ts`. Then implement it in each adapter:
-   - **Appwrite:** add the table to `appwrite.json` with row security on (or create it in the console and run `pnpm appwrite:pull`), run `pnpm appwrite:push` and `pnpm appwrite:types`, register it in `src/adapters/appwrite/app-models.ts` (`App*` type, `AppTablesTypeMap`, `APP_TABLES`), and write `notes.server.ts` like `todos.server.ts`.
-   - **Memory:** write `notes.server.ts` like `src/adapters/memory/todos.server.ts`.
-2. **Feature folder** `src/features/notes/`:
-   - `notes.schemas.ts`: zod schemas shared by the form and the server function.
+   - **Appwrite:** add the table to `appwrite.json` with row security on (or create it in the console and run `pnpm appwrite:pull`), run `pnpm appwrite:push` and `pnpm appwrite:types`, register it in `src/server/adapters/appwrite/app-models.ts` (`App*` type, `AppTablesTypeMap`, `APP_TABLES`), and write `notes.server.ts` like `todos.server.ts`.
+   - **Memory:** write `notes.server.ts` like `src/server/adapters/memory/todos.server.ts`.
+2. **Schemas:** `src/lib/schemas/notes.schemas.ts`: zod schemas shared by the form and the server function.
+3. **Server API** `src/server/api/notes/`:
    - `notes.handlers.server.ts`: handlers that start with `const user = await requireUser(context)` and use `context.data.notes` with `user.id`.
    - `notes.handlers.server.test.ts`: tests with `createTestContext()`.
    - `notes.functions.ts`: one `createServerFn(...).middleware([authMiddleware]).validator(schema)` per handler, dynamically importing the handler.
+4. **Client feature** `src/client/features/notes/`:
    - `notes.queries.ts`: `appQueryOptions` plus the registry entries.
    - `components/`: the page, with `useSuspenseQuery` and `useAppForm`.
-3. **Strings:** `src/i18n/locales/{en,it}/notes.json`.
-4. **Route:** `src/routes/_authed/_app/notes.tsx`, with a loader that calls `ensureQueryData` and a skeleton `pendingComponent`. Add it to `src/components/layout/app-navigation.ts`.
-5. Run **`pnpm verify`**.
+5. **Strings:** `src/i18n/locales/{en,it}/notes.json`.
+6. **Route:** `src/routes/_authed/_app/notes.tsx`, with a loader that calls `ensureQueryData` and a skeleton `pendingComponent`. Add it to `src/client/components/layout/app-navigation.ts`.
+7. Run **`pnpm verify`**.
 
 ### Guest merge hook
 
@@ -364,7 +374,7 @@ With Appwrite, `appwrite.json` is the schema. The repo ships a minimal `todos` t
 
 1. Set `projectId` in `appwrite.json` (it ships with the placeholder `your-project-id`).
 2. `pnpm appwrite:push` creates the tables in your project.
-3. `pnpm appwrite:types` generates `src/adapters/appwrite/generated/appwrite.ts` from the local file.
+3. `pnpm appwrite:types` generates `src/server/adapters/appwrite/generated/appwrite.ts` from the local file.
 
 Replace `todos` with your own tables in `appwrite.json` and run `pnpm appwrite:types` again. If you edit the schema in the console instead, `pnpm appwrite:pull` syncs the file.
 

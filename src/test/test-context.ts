@@ -1,6 +1,4 @@
 import { type Mock, vi } from "vitest";
-import type { SentEmail } from "#/adapters/memory/auth.server";
-import { createMemoryBackend } from "#/adapters/memory/backend.server";
 import type { AdminAuth, AuthService, SessionAuth } from "#/core/auth/ports";
 import type { AuthSession, EmailLinkParams, User } from "#/core/auth/types";
 import {
@@ -9,12 +7,14 @@ import {
 	type Locale,
 	type ThemePreference,
 } from "#/core/prefs";
-import { buildServerContext } from "#/server/auth-middleware.server";
+import type { SentEmail } from "#/server/adapters/memory/auth.server";
+import { createMemoryBackend } from "#/server/adapters/memory/backend.server";
+import { buildServerContext } from "#/server/context/context.server";
 import type {
 	PreferenceCookies,
 	ServerContext,
 	SessionCookie,
-} from "#/server/context";
+} from "#/server/context/context.types";
 
 /** An in-memory session cookie; `value` holds the stored token. */
 class FakeSessionCookie implements SessionCookie {

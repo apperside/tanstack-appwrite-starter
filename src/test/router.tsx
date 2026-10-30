@@ -12,9 +12,9 @@ import {
 	asTypedQueryClient,
 	type TypedQueryClient,
 } from "tanstack-query-typed";
+import { currentUserQuery } from "#/client/features/auth/auth.queries";
 import type { User } from "#/core/auth/types";
 import type { ThemePreference } from "#/core/prefs";
-import { currentUserQuery } from "#/features/auth/auth.queries";
 import type { Locale } from "#/i18n/locale";
 import { createQueryClient } from "#/lib/query-client";
 import { parseSearch } from "#/lib/search-params";

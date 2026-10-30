@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createMemoryBackend } from "#/adapters/memory/backend.server";
+import { createMemoryBackend } from "#/server/adapters/memory/backend.server";
 import { serverHooks } from "./server-hooks.server";
 
 describe("serverHooks", () => {

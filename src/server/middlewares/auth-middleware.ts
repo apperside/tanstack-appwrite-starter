@@ -33,7 +33,7 @@ function normalizeError(
 export const authMiddleware = createMiddleware({ type: "function" }).server(
 	async ({ next, serverFnMeta }) => {
 		try {
-			const { buildRequestContext } = await import("./auth-middleware.server");
+			const { buildRequestContext } = await import("../context/context.server");
 			return await next({ context: await buildRequestContext() });
 		} catch (error) {
 			throw normalizeError(error, serverFnMeta);

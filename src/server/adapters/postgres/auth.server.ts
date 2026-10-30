@@ -211,7 +211,7 @@ export function createPostgresAuth({
 				const [user] = await db.select().from(users).where(byEmail(email));
 				const valid = await verifyPassword(
 					password,
-					user?.passwordHash ?? (await dummyHash),
+					user ? user.passwordHash : await dummyHash,
 				);
 				if (!user || !valid) throw new AppError("INVALID_CREDENTIALS");
 				return db.transaction((tx) => openSession(tx, user.id, userAgent));

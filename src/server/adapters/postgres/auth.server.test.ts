@@ -125,4 +125,15 @@ describe("postgres auth", () => {
 		const [session] = await auth.session(token).listSessions();
 		expect(session?.clientName).toBe("Firefox");
 	});
+
+	it("rejects a registered user without a password hash", async () => {
+		const { auth } = await harness();
+		await auth.signUp(ann);
+		await testDb.client.exec("update users set password_hash = null");
+		for (const password of ["dummy password", ann.password]) {
+			await expect(
+				auth.signIn({ email: ann.email, password }),
+			).rejects.toMatchObject({ code: "INVALID_CREDENTIALS" });
+		}
+	});
 });

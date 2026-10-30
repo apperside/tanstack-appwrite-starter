@@ -45,20 +45,31 @@ export async function loadTransport(
 
 let mailer: Promise<SendEmail> | undefined;
 
+async function buildMailer(): Promise<SendEmail> {
+	try {
+		const { MAIL_PROVIDER, MAIL_FROM } = mailEnv();
+		return createMailer({
+			transport: await loadTransport(MAIL_PROVIDER),
+			from: MAIL_FROM,
+			provider: MAIL_PROVIDER,
+		});
+	} catch (cause) {
+		console.error("[mail] mail setup failed");
+		throw new AppError("UNKNOWN", { cause });
+	}
+}
+
 /**
  * The process-wide mailer. Env and transport load on the first send, so a
  * backend that never emails needs no mail configuration.
  */
 export function getSendEmail(): SendEmail {
 	return async (email) => {
-		mailer ??= (async () => {
-			const { MAIL_PROVIDER, MAIL_FROM } = mailEnv();
-			return createMailer({
-				transport: await loadTransport(MAIL_PROVIDER),
-				from: MAIL_FROM,
-				provider: MAIL_PROVIDER,
-			});
-		})();
+		// A failed setup is not cached: the next send retries it.
+		mailer ??= buildMailer().catch((error) => {
+			mailer = undefined;
+			throw error;
+		});
 		return (await mailer)(email);
 	};
 }

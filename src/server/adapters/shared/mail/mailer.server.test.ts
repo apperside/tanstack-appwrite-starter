@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AppError } from "#/lib/errors";
 import type { MailTransport } from "./mail";
-import { createMailer, loadTransport } from "./mailer.server";
+import { createMailer, getSendEmail, loadTransport } from "./mailer.server";
 
 const email = {
 	to: "ann@example.test",
@@ -52,5 +52,19 @@ describe("createMailer", () => {
 describe("loadTransport", () => {
 	it("loads the transport named by the provider", async () => {
 		await expect(loadTransport("console")).resolves.toHaveProperty("send");
+	});
+});
+
+describe("getSendEmail", () => {
+	it("rejects a bad setup as UNKNOWN, then recovers once it is fixed", async () => {
+		vi.spyOn(console, "error").mockImplementation(() => {});
+		const info = vi.spyOn(console, "info").mockImplementation(() => {});
+		const sendEmail = getSendEmail();
+		vi.stubEnv("MAIL_PROVIDER", "pigeon");
+		await expect(sendEmail(email)).rejects.toMatchObject({ code: "UNKNOWN" });
+		vi.stubEnv("MAIL_PROVIDER", "console");
+		await sendEmail(email);
+		expect(info).toHaveBeenCalledTimes(1);
+		vi.unstubAllEnvs();
 	});
 });

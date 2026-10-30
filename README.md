@@ -20,6 +20,7 @@ The official TanStack Start starter gives you routing, SSR and a demo page. This
 - [Project structure](#project-structure)
 - [How it works](#how-it-works)
 - [Backends](#backends)
+- [Email providers](#email-providers)
 - [Building your app on it](#building-your-app-on-it)
 - [Testing](#testing)
 - [Deployment](#deployment)
@@ -81,7 +82,7 @@ The official TanStack Start starter gives you routing, SSR and a demo page. This
 | Area | TanStack Start starter | This repo |
 |---|---|---|
 | Auth | — | SSR cookie sessions, guest/upgrade/merge, recovery, verification, onboarding, server-side route guards |
-| Backend | — | Backend-neutral ports with Appwrite and in-memory adapters, contract tests; typed TablesDB wrapper and generated types for Appwrite |
+| Backend | — | Backend-neutral ports with Appwrite, Postgres and in-memory adapters, pluggable email providers (console, SMTP, Mailgun), contract tests; typed TablesDB wrapper and generated types for Appwrite |
 | Data fetching | TanStack Query + SSR integration | One typed definition per query ([`tanstack-query-typed`](https://github.com/apperside/tanstack-query-typed)), loader prefetch, typed cache |
 | Account | — | Profile, password, email, sessions, preferences |
 | UI | Demo pages, basic Tailwind | Design system, responsive app shell, shadcn/ui kit, error / not-found / loading states |
@@ -178,7 +179,7 @@ All configuration lives in `.env.local`, validated at startup. A missing or inva
 
 | Variable | Scope | Description |
 |---|---|---|
-| `BACKEND` | server | The backend adapter: `appwrite` (default) or `memory` |
+| `BACKEND` | server | The backend adapter: `appwrite` (default), `memory` or `postgres` |
 | `VITE_REQUIRE_EMAIL_VERIFICATION` | public | `true` keeps unverified users on `/verify-email` until they verify. Default `false`: verification is offered but not enforced |
 | `APP_URL` | server | Public URL of the app, sub-path included. Recovery and verification links point here, and browsers without `Sec-Fetch-Site` may call server functions only from its origin (CSRF check) |
 | `TRUSTED_PROXY_HOPS` | server | Number of reverse proxies in front of the app that append to `X-Forwarded-For`. Default `0` uses the socket address |
@@ -191,6 +192,14 @@ Each backend adapter validates its own variables, the first time it is used, so 
 | `VITE_APPWRITE_PROJECT_ID` | public | Project id |
 | `VITE_APPWRITE_DATABASE_ID` | public | Database id |
 | `APPWRITE_API_KEY` | server | API key. Read only by server-only modules |
+
+For `BACKEND=postgres` (emails are covered under [Email providers](#email-providers)):
+
+| Variable | Scope | Description |
+|---|---|---|
+| `DATABASE_URL` | server | Postgres connection URL, e.g. `postgres://app:app@localhost:5432/app` |
+
+Blank values (a copied `.env.example`) count as unset.
 
 `VITE_*` values are inlined into the bundle at **build** time. The rest are read at **runtime** and never reach the browser.
 
@@ -212,6 +221,9 @@ Each backend adapter validates its own variables, the first time it is used, so 
 | `pnpm appwrite:types` | Generate types from the local `appwrite.json` |
 | `pnpm appwrite:pull` | Sync `appwrite.json` from your live project |
 | `pnpm appwrite:push` | Create or update the tables in your project from `appwrite.json` |
+| `pnpm dev:infra` | Start local Postgres and Mailpit (Docker) |
+| `pnpm db:generate` | Generate a SQL migration from `src/server/adapters/postgres/schema.ts` |
+| `pnpm db:migrate` | Apply the migrations to `DATABASE_URL` |
 | `pnpm generate-routes` | Regenerate the route tree (dev and build also do this) |
 
 Git hooks ([lefthook](https://github.com/evilmartians/lefthook)): pre-commit formats and lints staged files, and pre-push runs typecheck and tests.
@@ -247,7 +259,9 @@ src/
     api/                  Server functions per feature (`*.functions.ts` + handlers); `api.ts` lists them all
     adapters/             One folder per backend, each implementing `Backend`
       appwrite/           Account/Users/TablesDB adapter, clients, generated types, realtime
+      postgres/           Postgres backend (Drizzle): schema, migrations, auth, todos
       memory/             In-process backend for development, demos and tests
+      shared/mail/        Email rendering, mailer and transports (console, SMTP, Mailgun), used by postgres and memory
     context/              The per-request server context: its types and how it is built
     middlewares/          Auth (puts the context on server functions), CSRF, compression
     functions/            Isomorphic preference reads for the routes
@@ -308,13 +322,48 @@ Emailed links are opaque: the backend appends its credential to the URL it is gi
 | `BACKEND` | What it is |
 |---|---|
 | `appwrite` | Account, Users and TablesDB APIs, with the API key on the server. Realtime in the browser through `withBrowserClient` (Appwrite only) |
+| `postgres` | Users, sessions, one-time tokens and todos in Postgres, through Drizzle. Passwords are hashed with scrypt. Emails go through the [email provider](#email-providers) you pick |
 | `memory` | Everything in the server process: no service to run, nothing survives a restart, one store per server instance. Emails go to the server log. For development, demos, end-to-end runs and the test suite |
+
+**Running the Postgres backend**
+
+It stores users, sessions, verification and recovery tokens (only their hashes) and todos. Migrations live in `src/server/adapters/postgres/migrations/` and are applied with `pnpm db:migrate`.
+
+```bash
+pnpm dev:infra        # Postgres on :5432, Mailpit on :1025 (SMTP) and :8025 (web UI)
+pnpm db:migrate
+BACKEND=postgres DATABASE_URL=postgres://app:app@localhost:5432/app \
+  MAIL_PROVIDER=smtp SMTP_HOST=localhost SMTP_PORT=1025 MAIL_FROM="App <no-reply@app.test>" \
+  APP_URL=http://localhost:3000 pnpm dev
+```
+
+Emails sent this way show up in Mailpit at `http://localhost:8025`. Only `DATABASE_URL` is required by the adapter itself; see [Configuration](#configuration).
+
+**No row-level security.** Repositories check ownership themselves, so access control does not depend on the database. If the core ever gains group or role semantics, you can enforce them in depth: use a second role without `BYPASSRLS`, turn on `FORCE ROW LEVEL SECURITY` for the app tables, write policies over `current_setting('app.user_id')` (set with `set_config(..., true)` in a per-call transaction), and keep `transferOwnership` on the owner role.
 
 **Adding a backend**
 
 1. Create `src/server/adapters/<name>/` with a `createXBackend(): Backend` that implements the ports (start from `src/server/adapters/memory/`, the smallest complete one).
 2. Run the contract suites against it, the same way `src/server/adapters/memory/backend.server.test.ts` does: `describeAuthContract("<name>", ...)` and `describeTodosContract("<name>", ...)`. They pin the behavior every adapter must share.
 3. Add the name to `BACKENDS` in `src/config/env.ts` and a case in `src/server/backend.server.ts`. Each adapter is imported on demand, so a server only loads the one it runs.
+
+---
+
+## Email providers
+
+Backends that don't send their own emails (`postgres`, `memory`) use `src/server/adapters/shared/mail/`. Rendering (subject and body, en + it) is separate from delivery, so changing provider never changes the content. `MAIL_PROVIDER` picks the transport, and only the chosen one is loaded and validated. `MAIL_FROM` is required unless the provider is `console`. Appwrite sends its own emails and ignores all of this.
+
+| `MAIL_PROVIDER` | What it does | Its variables |
+|---|---|---|
+| `console` (default) | Logs each email, with its link, to the server log. Nothing is sent | none |
+| `smtp` | Sends through any SMTP server (nodemailer) | `SMTP_HOST`, `SMTP_PORT`, optional `SMTP_USER` and `SMTP_PASS`, `SMTP_SECURE` (default: true on port 465) |
+| `mailgun` | Mailgun HTTP API | `MAILGUN_API_KEY`, `MAILGUN_DOMAIN`, `MAILGUN_REGION` (`us` default, or `eu`) |
+
+**Adding a provider** (Resend, Postmark, SES...)
+
+1. Create `src/server/adapters/shared/mail/transports/<name>.server.ts` that exports a `MailTransport` (`send(message)`, rejecting with the provider's error) and parses its own env, like `mailgun.server.ts`.
+2. Add the name to `MAIL_PROVIDERS` in `shared/mail/env.ts`.
+3. Add a `case` in `loadTransport` in `shared/mail/mailer.server.ts`, with a dynamic `import()`.
 
 ---
 
@@ -403,7 +452,8 @@ docker compose --env-file .env.local up --build    # app on :3000
 ```
 
 - `--env-file` is required: the `VITE_*` values become build arguments. Server secrets are read at runtime from `env_file` and never enter the image.
-- The compose file runs only the app; Appwrite runs separately.
+- The compose file runs only the app by default; Appwrite runs separately.
+- **With Postgres and Mailpit:** `docker compose --profile postgres --env-file .env.local up --build`, with `BACKEND=postgres`, `DATABASE_URL=postgres://app:app@postgres:5432/app`, `MAIL_PROVIDER=smtp`, `SMTP_HOST=mailpit` and `SMTP_PORT=1025` in `.env.local`. Apply migrations first with `pnpm db:migrate` against the published port. In production, point `DATABASE_URL` at your own database and use a real mail provider.
 - **Behind a reverse proxy** (TLS, a domain):
   - set `TRUSTED_PROXY_HOPS` to the number of proxies that append to `X-Forwarded-For`, usually `1`, otherwise rate limiting sees the proxy's IP for everyone;
   - set `APP_URL` to the public URL.

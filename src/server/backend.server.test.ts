@@ -8,7 +8,10 @@ vi.mock("#/server/adapters/appwrite/backend.server", () => ({
 vi.mock("#/server/adapters/postgres/backend.server", () => ({
 	createPostgresBackendFromEnv: async () => ({ name: "postgres" }),
 }));
-vi.mock("#/config/env", () => ({ serverEnv: () => ({ BACKEND: "appwrite" }) }));
+vi.mock("#/config/env", async (importOriginal) => ({
+	...(await importOriginal<typeof import("#/config/env")>()),
+	serverEnv: () => ({ BACKEND: "appwrite" }),
+}));
 
 beforeEach(() => createAppwriteBackend.mockReturnValue({ name: "appwrite" }));
 

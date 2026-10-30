@@ -8,7 +8,10 @@ import { throughMiddleware } from "#/test/through-middleware";
 import { issueBrowserJwtHandler } from "./realtime.handlers.server";
 
 let backend = "appwrite";
-vi.mock("#/config/env", () => ({ serverEnv: () => ({ BACKEND: backend }) }));
+vi.mock("#/config/env", async (importOriginal) => ({
+	...(await importOriginal<typeof import("#/config/env")>()),
+	serverEnv: () => ({ BACKEND: backend }),
+}));
 
 describe("issueBrowserJwtHandler", () => {
 	it("mints a JWT for the user and current session", async () => {

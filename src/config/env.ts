@@ -2,7 +2,7 @@
 import { z } from "zod/mini";
 
 /** Reads an empty string as an unset variable. */
-function emptyAsUnset<T extends z.ZodMiniType>(schema: T) {
+export function emptyAsUnset<T extends z.ZodMiniType>(schema: T) {
 	return z.pipe(
 		z.transform((value: unknown) => (value === "" ? undefined : value)),
 		schema,

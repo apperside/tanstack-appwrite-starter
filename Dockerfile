@@ -36,9 +36,12 @@ ENV NODE_ENV=production \
     HOST=0.0.0.0
 
 # Nitro bundles its dependencies into .output, so nothing else is needed.
-# Server env (APPWRITE_API_KEY, APP_URL, TRUSTED_PROXY_HOPS) is provided at
-# runtime, e.g. via `env_file` in docker-compose.yml.
+# Server env (APPWRITE_API_KEY, DATABASE_URL, MAIL_*, SMTP_*, MAILGUN_*,
+# APP_URL, TRUSTED_PROXY_HOPS) is provided at runtime, e.g. via `env_file` in
+# docker-compose.yml.
 COPY --from=build --chown=node:node /app/.output ./.output
+# The Postgres adapter applies these at startup, resolved from the working directory.
+COPY --from=build --chown=node:node /app/src/server/adapters/postgres/migrations ./src/server/adapters/postgres/migrations
 
 USER node
 EXPOSE 3000

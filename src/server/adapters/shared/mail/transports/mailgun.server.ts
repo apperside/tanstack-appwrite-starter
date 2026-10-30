@@ -1,5 +1,5 @@
 import { z } from "zod/mini";
-import { parseOrThrow } from "#/config/env";
+import { emptyAsUnset, parseOrThrow } from "#/config/env";
 import type { MailTransport } from "../mail";
 
 const API_BASE = {
@@ -10,7 +10,7 @@ const API_BASE = {
 const schema = z.object({
 	MAILGUN_API_KEY: z.string().check(z.minLength(1)),
 	MAILGUN_DOMAIN: z.string().check(z.minLength(1)),
-	MAILGUN_REGION: z._default(z.enum(["us", "eu"]), "us"),
+	MAILGUN_REGION: emptyAsUnset(z._default(z.enum(["us", "eu"]), "us")),
 });
 
 export function parseMailgunEnv(raw: Record<string, unknown>) {

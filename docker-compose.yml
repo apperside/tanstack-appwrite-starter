@@ -1,4 +1,8 @@
 # Self-hosting: `docker compose --env-file .env.local up --build`.
+# With the Postgres backend and local Mailpit (mail UI on :8025), add the profile:
+#   docker compose --profile postgres --env-file .env.local up --build
+# and set BACKEND=postgres, DATABASE_URL=postgres://app:app@postgres:5432/app,
+# MAIL_PROVIDER=smtp, SMTP_HOST=mailpit, SMTP_PORT=1025 in .env.local.
 services:
   app:
     build:
@@ -13,13 +17,47 @@ services:
         VITE_APPWRITE_PROJECT_ID: ${VITE_APPWRITE_PROJECT_ID:-}
         VITE_APPWRITE_DATABASE_ID: ${VITE_APPWRITE_DATABASE_ID:-}
         VITE_REQUIRE_EMAIL_VERIFICATION: ${VITE_REQUIRE_EMAIL_VERIFICATION:-false}
-    # Server secrets and settings (BACKEND, APPWRITE_API_KEY, APP_URL,
-    # TRUSTED_PROXY_HOPS) are read at runtime only.
+    # Server secrets and settings (BACKEND, APPWRITE_API_KEY, DATABASE_URL,
+    # MAIL_*, SMTP_*, MAILGUN_*, APP_URL, TRUSTED_PROXY_HOPS) are read at
+    # runtime only.
     env_file: .env.local
     environment:
       # Set to the number of reverse proxies in front of the app; 0 when
       # exposed directly. Overrides any value in .env.local.
       TRUSTED_PROXY_HOPS: ${TRUSTED_PROXY_HOPS:-0}
+    # Optional: the app still starts when the postgres profile is off.
+    depends_on:
+      postgres:
+        condition: service_healthy
+        required: false
     ports:
       - "3000:3000"
     restart: unless-stopped
+
+  postgres:
+    profiles: [postgres]
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app
+      POSTGRES_DB: app
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Catches outgoing mail for development: SMTP on :1025, web UI on :8025.
+  mailpit:
+    profiles: [postgres]
+    image: axllent/mailpit
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+
+volumes:
+  pgdata:

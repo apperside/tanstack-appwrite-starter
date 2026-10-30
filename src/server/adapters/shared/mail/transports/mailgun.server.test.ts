@@ -30,6 +30,17 @@ describe("parseMailgunEnv", () => {
 	});
 });
 
+describe("parseMailgunEnv blanks", () => {
+	it("reads a blank MAILGUN_REGION as the default", () => {
+		const env = parseMailgunEnv({
+			MAILGUN_API_KEY: "k",
+			MAILGUN_DOMAIN: "d",
+			MAILGUN_REGION: "",
+		});
+		expect(env.MAILGUN_REGION).toBe("us");
+	});
+});
+
 describe("createMailgunTransport", () => {
 	it("posts to the US API by default", async () => {
 		const { fetchImpl, transport } = setup(base);

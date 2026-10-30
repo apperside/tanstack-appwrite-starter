@@ -1,13 +1,13 @@
 import { z } from "zod/mini";
-import { parseOrThrow } from "#/config/env";
+import { emptyAsUnset, parseOrThrow } from "#/config/env";
 
 /** The mail transports a deployment can pick with `MAIL_PROVIDER`. */
 export const MAIL_PROVIDERS = ["console", "smtp", "mailgun"] as const;
 
 const schema = z
 	.object({
-		MAIL_PROVIDER: z._default(z.enum(MAIL_PROVIDERS), "console"),
-		MAIL_FROM: z._default(z.string(), ""),
+		MAIL_PROVIDER: emptyAsUnset(z._default(z.enum(MAIL_PROVIDERS), "console")),
+		MAIL_FROM: emptyAsUnset(z._default(z.string(), "")),
 	})
 	.check(
 		z.refine((env) => env.MAIL_PROVIDER === "console" || env.MAIL_FROM !== "", {

@@ -21,6 +21,19 @@ describe("parseSmtpEnv", () => {
 		expect(() => parseSmtpEnv({})).toThrow(/SMTP_HOST.*SMTP_PORT/);
 	});
 
+	it("reads blank optional values as unset", () => {
+		const env = parseSmtpEnv({
+			SMTP_HOST: "smtp.test",
+			SMTP_PORT: "465",
+			SMTP_USER: "",
+			SMTP_PASS: "",
+			SMTP_SECURE: "",
+		});
+		expect(env).toMatchObject({ SMTP_SECURE: true });
+		expect(env.SMTP_USER).toBeUndefined();
+		expect(env.SMTP_PASS).toBeUndefined();
+	});
+
 	it("is secure by default only on 465", () => {
 		const base = { SMTP_HOST: "smtp.test" };
 		expect(parseSmtpEnv({ ...base, SMTP_PORT: "465" }).SMTP_SECURE).toBe(true);

@@ -61,3 +61,21 @@ this list against a real instance before a release.
   <APP_URL>/_serverFn/x` answers `403`. Over https, the session cookie is
   named `__Host-app_session` in devtools.
 - [ ] **Clean up:** delete every test user.
+
+## Postgres backend
+
+Run with `BACKEND=postgres` after `pnpm dev:infra` and `pnpm db:migrate`
+(see the README's Backends section), with `MAIL_PROVIDER=smtp`,
+`SMTP_HOST=localhost` and `SMTP_PORT=1025`. The Appwrite-specific console
+checks above do not apply.
+
+- [ ] **Sign up:** the verification email appears in Mailpit
+  (`http://localhost:8025`) and its link verifies the account.
+- [ ] **Forgot password:** the reset link from Mailpit works once; a second
+  visit shows the invalid-link state.
+- [ ] **Guest → upgrade:** the guest's todos are still there after saving the
+  account.
+- [ ] **Restart:** restart the app container (or process); you are still
+  signed in.
+- [ ] **Real email:** with `MAIL_PROVIDER=mailgun` (and its variables), one
+  verification email really arrives.

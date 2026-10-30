@@ -24,8 +24,9 @@ export async function migratePostgres(
 				"src/server/adapters/postgres/migrations",
 			),
 		});
-	} finally {
 		await connection`select pg_advisory_unlock(${LOCK_PARAM}::bigint)`;
+	} finally {
+		// If the connection died, the lock went with it; release must still run.
 		connection.release();
 	}
 }

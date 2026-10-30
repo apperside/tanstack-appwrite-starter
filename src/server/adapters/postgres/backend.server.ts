@@ -42,7 +42,7 @@ export async function createPostgresBackendFromEnv(): Promise<Backend> {
 		await migratePostgres(sql, db);
 		return createPostgresBackend({ db });
 	} catch (error) {
-		await sql.end();
+		await sql.end().catch(() => {});
 		throw error;
 	}
 }

@@ -47,7 +47,9 @@ describe("createPostgresBackend", () => {
 			db: testDb.db,
 			sendEmail: vi.fn(),
 		});
+		vi.mocked(hashPassword).mockClear();
 		await backend.auth({ userAgent: undefined }).signUp(ann);
 		expect(hashPassword).toHaveBeenCalledWith(ann.password, OWASP_SCRYPT);
+		expect(hashPassword).not.toHaveBeenCalledWith(ann.password, LOW_SCRYPT);
 	});
 });

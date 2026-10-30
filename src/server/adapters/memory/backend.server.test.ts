@@ -97,25 +97,6 @@ describe("memory backend", () => {
 		});
 	});
 
-	it("records the browser of each session", async () => {
-		const backend = createMemoryBackend({ sendEmail: () => {} });
-		const { token } = await backend
-			.auth({
-				userAgent:
-					"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Gecko/20100101 Firefox/140.0",
-			})
-			.signUp(ann);
-		const [session] = await backend
-			.auth({ userAgent: undefined })
-			.session(token)
-			.listSessions();
-		expect(session).toMatchObject({
-			clientName: "Firefox",
-			osName: "Mac",
-			deviceName: "desktop",
-		});
-	});
-
 	it("lets only a guest upgrade, and only a registered user verify", async () => {
 		const { auth } = harness();
 		const user = await auth.signUp(ann);

@@ -1,9 +1,4 @@
-import {
-	randomBytes,
-	randomUUID,
-	scryptSync,
-	timingSafeEqual,
-} from "node:crypto";
+import { randomUUID } from "node:crypto";
 import type { AdminAuth, AuthService, SessionAuth } from "#/core/auth/ports";
 import type {
 	AuthSession,
@@ -14,14 +9,14 @@ import type {
 import type { RequestInfo } from "#/core/backend";
 import type { AppPrefs } from "#/core/prefs";
 import { AppError } from "#/lib/errors";
-import { describeUserAgent } from "./user-agent";
-
-const MINUTE = 60_000;
-const DAY = 24 * 60 * MINUTE;
-// Appwrite's defaults, so both backends behave alike.
-const SESSION_TTL = 365 * DAY;
-const VERIFICATION_TTL = 7 * DAY;
-const RECOVERY_TTL = 60 * MINUTE;
+import {
+	hashPassword,
+	LOW_SCRYPT,
+	verifyPassword,
+} from "../shared/passwords.server";
+import { linkTo, newToken } from "../shared/tokens.server";
+import { RECOVERY_TTL, SESSION_TTL, VERIFICATION_TTL } from "../shared/ttl";
+import { describeUserAgent } from "../shared/user-agent";
 
 type StoredUser = {
 	id: string;
@@ -62,33 +57,8 @@ export type MemoryAuthOptions = {
 	sendEmail: (email: SentEmail) => void;
 };
 
-/** Scrypt with a low cost: the memory backend is for development and tests. */
-function hashPassword(password: string): string {
-	const salt = randomBytes(16);
-	const hash = scryptSync(password, salt, 32, { N: 1024 });
-	return `${salt.toString("base64")}:${hash.toString("base64")}`;
-}
-
-function verifyPassword(password: string, stored: string | null): boolean {
-	if (!stored) return false;
-	const [salt = "", hash = ""] = stored.split(":");
-	const expected = Buffer.from(hash, "base64");
-	const actual = scryptSync(password, Buffer.from(salt, "base64"), 32, {
-		N: 1024,
-	});
-	return timingSafeEqual(actual, expected);
-}
-
-const newToken = () => randomBytes(32).toString("base64url");
-
-/** `redirectUrl` with `params` added to its query. */
-function linkTo(redirectUrl: string, params: EmailLinkParams): string {
-	const url = new URL(redirectUrl);
-	for (const [key, value] of Object.entries(params)) {
-		url.searchParams.set(key, value);
-	}
-	return url.toString();
-}
+/** The memory backend is for development and tests: hash cheaply. */
+const hash = (password: string) => hashPassword(password, LOW_SCRYPT);
 
 /**
  * The auth ports in process memory: every user, session and emailed link
@@ -244,20 +214,23 @@ export function createMemoryAuth({ now, sendEmail }: MemoryAuthOptions) {
 			// confirms the current one.
 			updateEmail: async ({ email, password }) => {
 				const { user } = current();
-				if (user.passwordHash && !verifyPassword(password, user.passwordHash)) {
+				if (
+					user.passwordHash &&
+					!(await verifyPassword(password, user.passwordHash))
+				) {
 					throw new AppError("INVALID_CREDENTIALS");
 				}
 				assertEmailFree(email, user.id);
 				user.email = email;
 				user.emailVerified = false;
-				user.passwordHash ??= hashPassword(password);
+				user.passwordHash ??= await hash(password);
 			},
 			updatePassword: async ({ password, oldPassword }) => {
 				const user = registered();
-				if (!verifyPassword(oldPassword, user.passwordHash)) {
+				if (!(await verifyPassword(oldPassword, user.passwordHash))) {
 					throw new AppError("INVALID_CREDENTIALS");
 				}
-				user.passwordHash = hashPassword(password);
+				user.passwordHash = await hash(password);
 				for (const [key, session] of sessions) {
 					if (session.userId === user.id && key !== token) sessions.delete(key);
 				}
@@ -279,7 +252,7 @@ export function createMemoryAuth({ now, sendEmail }: MemoryAuthOptions) {
 					name,
 					email,
 					emailVerified: false,
-					passwordHash: hashPassword(password),
+					passwordHash: await hash(password),
 				});
 				return toAuthSession(session);
 			},
@@ -325,13 +298,13 @@ export function createMemoryAuth({ now, sendEmail }: MemoryAuthOptions) {
 				const user = createUser({
 					name,
 					email,
-					passwordHash: hashPassword(password),
+					passwordHash: await hash(password),
 				});
 				return createSession(user.id, userAgent);
 			},
 			signIn: async ({ email, password }) => {
 				const user = findByEmail(email);
-				if (!user || !verifyPassword(password, user.passwordHash)) {
+				if (!user || !(await verifyPassword(password, user.passwordHash))) {
 					throw new AppError("INVALID_CREDENTIALS");
 				}
 				return createSession(user.id, userAgent);
@@ -344,7 +317,7 @@ export function createMemoryAuth({ now, sendEmail }: MemoryAuthOptions) {
 			},
 			resetPassword: async ({ link, password }) => {
 				const user = useLink(link, "recovery");
-				user.passwordHash = hashPassword(password);
+				user.passwordHash = await hash(password);
 				for (const [key, session] of sessions) {
 					if (session.userId === user.id) sessions.delete(key);
 				}

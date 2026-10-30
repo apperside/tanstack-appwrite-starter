@@ -17,8 +17,8 @@ const match = (list: [RegExp, string][], ua: string) =>
 	list.find(([pattern]) => pattern.test(ua))?.[1] ?? "";
 
 /**
- * A rough browser and OS for the session list; empty when unknown. Enough for
- * development: a real backend parses the user agent properly.
+ * A rough browser and OS for the sessions list of the self-run backends
+ * (memory, Postgres); empty when unknown. Appwrite parses user agents itself.
  */
 export function describeUserAgent(userAgent: string | undefined): {
 	clientName: string;

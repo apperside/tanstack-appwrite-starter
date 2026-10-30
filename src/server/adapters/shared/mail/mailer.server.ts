@@ -37,7 +37,7 @@ export async function loadTransport(
 				await import("./transports/console.server")
 			).createConsoleTransport();
 		case "smtp":
-			throw new Error("not implemented");
+			return (await import("./transports/smtp.server")).createSmtpTransport();
 		case "mailgun":
 			throw new Error("not implemented");
 	}

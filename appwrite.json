@@ -1,83 +1,126 @@
 {
-  "projectId": "your-project-id",
-  "tablesDB": [
-    {
-      "$id": "app",
-      "name": "App",
-      "enabled": true
-    }
-  ],
-  "tables": [
-    {
-      "$id": "todos",
-      "$permissions": [],
-      "databaseId": "app",
-      "name": "Todos",
-      "enabled": true,
-      "rowSecurity": true,
-      "columns": [
-        {
-          "key": "title",
-          "type": "string",
-          "required": true,
-          "array": false,
-          "size": 255,
-          "default": null,
-          "encrypt": false
+    "projectId": "your-project-id",
+    "projectName": "ExampleTodo",
+    "settings": {
+        "services": {
+            "account": true,
+            "avatars": true,
+            "databases": true,
+            "locale": true,
+            "health": true,
+            "storage": true,
+            "teams": true,
+            "users": true,
+            "sites": true,
+            "functions": true,
+            "graphql": true,
+            "messaging": true
         },
-        {
-          "key": "completed",
-          "type": "boolean",
-          "required": false,
-          "array": false,
-          "default": false
+        "protocols": {
+            "rest": true,
+            "graphql": true,
+            "websocket": true
         },
-        {
-          "key": "priority",
-          "type": "string",
-          "required": false,
-          "array": false,
-          "default": "normal",
-          "format": "enum",
-          "elements": [
-            "low",
-            "normal",
-            "high"
-          ]
-        },
-        {
-          "key": "dueDate",
-          "type": "datetime",
-          "required": false,
-          "array": false,
-          "format": "",
-          "default": null
-        },
-        {
-          "key": "ownerId",
-          "type": "string",
-          "required": true,
-          "array": false,
-          "size": 36,
-          "default": null,
-          "encrypt": false
+        "auth": {
+            "methods": {
+                "jwt": true,
+                "phone": true,
+                "invites": true,
+                "anonymous": true,
+                "email-otp": true,
+                "magic-url": true,
+                "email-password": true
+            },
+            "security": {
+                "duration": 31536000,
+                "limit": null,
+                "sessionsLimit": 10,
+                "passwordHistory": null,
+                "passwordDictionary": false,
+                "personalDataCheck": false,
+                "sessionAlerts": false,
+                "mockNumbers": []
+            }
         }
-      ],
-      "indexes": [
+    },
+    "tablesDB": [
         {
-          "key": "idx_owner_completed",
-          "type": "key",
-          "status": "available",
-          "columns": [
-            "ownerId",
-            "completed"
-          ],
-          "orders": [
-            "ASC",
-            "ASC"
-          ]
+            "$id": "app",
+            "name": "App",
+            "enabled": true
         }
-      ]
-    }
-  ]
+    ],
+    "tables": [
+        {
+            "$id": "todos",
+            "$permissions": [],
+            "databaseId": "app",
+            "name": "Todos",
+            "enabled": true,
+            "rowSecurity": true,
+            "columns": [
+                {
+                    "key": "title",
+                    "type": "string",
+                    "required": true,
+                    "array": false,
+                    "size": 255,
+                    "default": null,
+                    "encrypt": false
+                },
+                {
+                    "key": "completed",
+                    "type": "boolean",
+                    "required": false,
+                    "array": false,
+                    "default": false
+                },
+                {
+                    "key": "priority",
+                    "type": "string",
+                    "required": false,
+                    "array": false,
+                    "default": "normal",
+                    "format": "enum",
+                    "elements": [
+                        "low",
+                        "normal",
+                        "high"
+                    ]
+                },
+                {
+                    "key": "dueDate",
+                    "type": "datetime",
+                    "required": false,
+                    "array": false,
+                    "format": "",
+                    "default": null
+                },
+                {
+                    "key": "ownerId",
+                    "type": "string",
+                    "required": true,
+                    "array": false,
+                    "size": 36,
+                    "default": null,
+                    "encrypt": false
+                }
+            ],
+            "indexes": [
+                {
+                    "key": "idx_owner_completed",
+                    "type": "key",
+                    "status": "available",
+                    "columns": [
+                        "ownerId",
+                        "completed"
+                    ],
+                    "orders": [
+                        "ASC",
+                        "ASC"
+                    ]
+                }
+            ]
+        }
+    ]
 }

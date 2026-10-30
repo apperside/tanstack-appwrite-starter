@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ThemePreference } from "#/lib/appwrite/app-models";
+import type { ThemePreference } from "#/core/prefs";
 import {
 	applyTheme,
 	parseThemeCookie,

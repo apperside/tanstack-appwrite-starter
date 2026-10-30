@@ -17,7 +17,7 @@ const FRAMEWORK =
 
 /** The form kit: the public pages and settings all render forms. */
 const FORMS =
-	/[\\/]node_modules[\\/](@tanstack[\\/](react-form|form-core|pacer-lite|devtools-event-client)|@radix-ui[\\/](react-label|react-primitive))[\\/]|[\\/]src[\\/]components[\\/](form[\\/]|ui[\\/](input|label|alert)\.tsx)/;
+	/[\\/]node_modules[\\/](@tanstack[\\/](react-form|form-core|pacer-lite|devtools-event-client)|@radix-ui[\\/](react-label|react-primitive))[\\/]|[\\/]src[\\/]client[\\/]components[\\/](form[\\/]|ui[\\/](input|label|alert)\.tsx)/;
 
 const config = defineConfig({
 	resolve: { tsconfigPaths: true },

@@ -5,9 +5,9 @@
  * then call `completeOnboarding` at the end so the `app` guard lets the user in.
  */
 import { createFileRoute, redirect } from "@tanstack/react-router";
-import { PageSkeleton } from "#/components/layout/page-skeleton";
+import { PageSkeleton } from "#/client/components/layout/page-skeleton";
+import { OnboardingPage } from "#/client/features/onboarding/components/onboarding-page";
 import { publicEnv } from "#/config/env";
-import { OnboardingPage } from "#/features/onboarding/components/onboarding-page";
 import { resolveGuardRedirect } from "#/lib/guards";
 
 export const Route = createFileRoute("/_authed/onboarding")({

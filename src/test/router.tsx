@@ -12,9 +12,10 @@ import {
 	asTypedQueryClient,
 	type TypedQueryClient,
 } from "tanstack-query-typed";
-import { currentUserQuery } from "#/features/auth/auth.queries";
+import { currentUserQuery } from "#/client/features/auth/auth.queries";
+import type { User } from "#/core/auth/types";
+import type { ThemePreference } from "#/core/prefs";
 import type { Locale } from "#/i18n/locale";
-import type { AppUser, ThemePreference } from "#/lib/appwrite/app-models";
 import { createQueryClient } from "#/lib/query-client";
 import { parseSearch } from "#/lib/search-params";
 import { renderWithProviders } from "./render";
@@ -27,7 +28,7 @@ type Options = {
 	/** The initial entry's history state, as a reload would restore it. */
 	historyState?: Record<string, unknown>;
 	/** Seeds the `currentUser` cache, as SSR hydration would. */
-	user?: AppUser | null;
+	user?: User | null;
 	theme?: ThemePreference;
 	locale?: Locale;
 	/** Renders under a root `<StrictMode>`, which mounts effects twice (as in dev). */

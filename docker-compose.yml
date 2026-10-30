@@ -8,11 +8,12 @@ services:
       # Compose only auto-loads `.env`, so run:
       #   docker compose --env-file .env.local up --build
       args:
-        VITE_APPWRITE_ENDPOINT: ${VITE_APPWRITE_ENDPOINT:?set via --env-file .env.local}
-        VITE_APPWRITE_PROJECT_ID: ${VITE_APPWRITE_PROJECT_ID:?set via --env-file .env.local}
-        VITE_APPWRITE_DATABASE_ID: ${VITE_APPWRITE_DATABASE_ID:?set via --env-file .env.local}
+        # Needed by BACKEND=appwrite (the default); the app checks them on first use.
+        VITE_APPWRITE_ENDPOINT: ${VITE_APPWRITE_ENDPOINT:-}
+        VITE_APPWRITE_PROJECT_ID: ${VITE_APPWRITE_PROJECT_ID:-}
+        VITE_APPWRITE_DATABASE_ID: ${VITE_APPWRITE_DATABASE_ID:-}
         VITE_REQUIRE_EMAIL_VERIFICATION: ${VITE_REQUIRE_EMAIL_VERIFICATION:-false}
-    # Server secrets and settings (APPWRITE_API_KEY, APP_URL,
+    # Server secrets and settings (BACKEND, APPWRITE_API_KEY, APP_URL,
     # TRUSTED_PROXY_HOPS) are read at runtime only.
     env_file: .env.local
     environment:

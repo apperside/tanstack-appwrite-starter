@@ -1,143 +1,22 @@
-import { type Account, Client, type TablesDB, type Users } from "node-appwrite";
 import { type Mock, vi } from "vitest";
-import type {
-	AppClient,
-	AppPrefs,
-	AppUser,
-	Locale,
-	ThemePreference,
-} from "#/lib/appwrite/app-models";
-import { AdminTables, AppTables } from "#/lib/appwrite/app-tables";
-import { AppError } from "#/lib/errors";
-import { appLink } from "#/server/app-link";
+import type { AdminAuth, AuthService, SessionAuth } from "#/core/auth/ports";
+import type { AuthSession, EmailLinkParams, User } from "#/core/auth/types";
+import {
+	type AppPrefs,
+	DEFAULT_PREFS,
+	type Locale,
+	type ThemePreference,
+} from "#/core/prefs";
+import type { SentEmail } from "#/server/adapters/memory/auth.server";
+import { createMemoryBackend } from "#/server/adapters/memory/backend.server";
+import { buildServerContext } from "#/server/context/context.server";
 import type {
 	PreferenceCookies,
 	ServerContext,
 	SessionCookie,
-} from "#/server/context";
-import { aSession } from "./fixtures";
+} from "#/server/context/context.types";
 
-// biome-ignore lint/suspicious/noExplicitAny: matches Vitest's own `Procedure` constraint.
-type AnyFn = (...args: any[]) => any;
-
-type Same<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
-
-/**
- * The SDK declares most methods twice: the object form first, then a deprecated
- * positional form. Vitest would type a mock by the last overload, so pick the
- * first one. Single-signature methods (e.g. generic `get<P>()`) are kept as is.
- */
-type ObjectForm<F> = F extends {
-	(...args: infer A1): infer R1;
-	(...args: infer A2): unknown;
-}
-	? Same<A1, A2> extends true
-		? F
-		: (...args: A1) => R1
-	: F;
-
-/** One `vi.fn` per listed method, typed against the SDK's object-form signature. */
-type Fake<T, K extends keyof T> = {
-	[P in K]: T[P] extends AnyFn ? Mock<ObjectForm<T[P]>> : never;
-};
-
-const ACCOUNT_METHODS = [
-	"get",
-	"create",
-	"createEmailPasswordSession",
-	"createAnonymousSession",
-	"getSession",
-	"deleteSession",
-	"deleteSessions",
-	"listSessions",
-	"getPrefs",
-	"updatePrefs",
-	"updateName",
-	"updateEmail",
-	"updatePassword",
-	"createRecovery",
-	"updateRecovery",
-	"createVerification",
-	"updateVerification",
-] as const satisfies readonly (keyof Account)[];
-
-// node-appwrite has no `Account.createJWT`; JWTs are minted with `users.createJWT`.
-const USERS_METHODS = [
-	"createJWT",
-	"get",
-	"delete",
-	"deleteSession",
-] as const satisfies readonly (keyof Users)[];
-
-// Includes every method the typed tables wrappers call.
-const TABLES_METHODS = [
-	"listRows",
-	"getRow",
-	"createRow",
-	"updateRow",
-	"upsertRow",
-	"deleteRow",
-	"createRows",
-	"upsertRows",
-	"deleteRows",
-] as const satisfies readonly (keyof TablesDB)[];
-
-type FakeAccount = Fake<Account, (typeof ACCOUNT_METHODS)[number]>;
-type FakeUsers = Fake<Users, (typeof USERS_METHODS)[number]>;
-type FakeTables = Fake<TablesDB, (typeof TABLES_METHODS)[number]>;
-
-/** Unstubbed methods reject with `not stubbed: <service>.<method>`, so a forgotten stub fails loudly. */
-function fake<T, K extends keyof T & string>(
-	service: string,
-	methods: readonly K[],
-): Fake<T, K> {
-	const entries = methods.map((method) => [
-		method,
-		vi.fn(() => Promise.reject(new Error(`not stubbed: ${service}.${method}`))),
-	]);
-	return Object.fromEntries(entries) as Fake<T, K>;
-}
-
-const fakeAccount = () =>
-	fake<Account, (typeof ACCOUNT_METHODS)[number]>("account", ACCOUNT_METHODS);
-const fakeUsers = () =>
-	fake<Users, (typeof USERS_METHODS)[number]>("users", USERS_METHODS);
-const fakeTables = () =>
-	fake<TablesDB, (typeof TABLES_METHODS)[number]>("tables", TABLES_METHODS);
-
-const TEST_DATABASE_ID = "test-db";
-
-/*
- * The fakes cover only the methods the app calls, so they are cast to the SDK
- * classes here, once. Each method is still typed against the SDK signature.
- */
-function userClient(
-	account: FakeAccount,
-	tables: FakeTables,
-): AppClient<"server"> {
-	const db = tables as unknown as TablesDB;
-	return {
-		client: new Client(),
-		account: account as unknown as Account,
-		tables: Object.assign(db, { typed: new AppTables(db, TEST_DATABASE_ID) }),
-	};
-}
-
-function adminClient(
-	account: FakeAccount,
-	users: FakeUsers,
-	tables: FakeTables,
-): AppClient<"admin"> {
-	const db = tables as unknown as TablesDB;
-	return {
-		client: new Client(),
-		account: account as unknown as Account,
-		users: users as unknown as Users,
-		tables: Object.assign(db, { typed: new AdminTables(db, TEST_DATABASE_ID) }),
-	};
-}
-
-/** An in-memory session cookie; `value` holds the stored secret. */
+/** An in-memory session cookie; `value` holds the stored token. */
 class FakeSessionCookie implements SessionCookie {
 	value: string | undefined;
 
@@ -145,8 +24,8 @@ class FakeSessionCookie implements SessionCookie {
 		return this.value;
 	}
 
-	write(session: { secret: string }) {
-		this.value = session.secret;
+	write(session: Pick<AuthSession, "token">) {
+		this.value = session.token;
 	}
 
 	clear() {
@@ -176,14 +55,95 @@ class FakePreferenceCookies implements PreferenceCookies {
 	}
 }
 
+// biome-ignore lint/suspicious/noExplicitAny: any method's parameters.
+type AnyFn = (...args: any[]) => any;
+
+type Spies<T> = { [K in keyof T]: T[K] extends AnyFn ? Mock<T[K]> : never };
+
+/** A session method's spy: the session's token comes first. */
+type SessionSpies = {
+	[K in keyof SessionAuth]: Mock<
+		(
+			token: string,
+			...args: Parameters<SessionAuth[K]>
+		) => ReturnType<SessionAuth[K]>
+	>;
+};
+
+const SERVICE_METHODS = [
+	"signUp",
+	"signIn",
+	"startGuest",
+	"requestPasswordReset",
+	"resetPassword",
+	"confirmVerification",
+] as const satisfies readonly (keyof AuthService)[];
+
+const SESSION_METHODS = [
+	"getUser",
+	"signOut",
+	"signOutEverywhere",
+	"listSessions",
+	"updateName",
+	"updateEmail",
+	"updatePassword",
+	"sendVerification",
+	"updatePrefs",
+	"upgradeGuest",
+] as const satisfies readonly (keyof SessionAuth)[];
+
+const ADMIN_METHODS = [
+	"deleteUser",
+	"deleteSession",
+] as const satisfies readonly (keyof AdminAuth)[];
+
+function spyOn<T extends object>(
+	target: T,
+	methods: readonly (keyof T & string)[],
+): Spies<T> {
+	return Object.fromEntries(
+		methods.map((method) => [
+			method,
+			vi.fn((...args: unknown[]) => (target[method] as AnyFn)(...args)),
+		]),
+	) as Spies<T>;
+}
+
+/**
+ * The auth ports of `real`, every method a spy that calls through: assert on
+ * calls, or make one fail (`session.updatePrefs.mockRejectedValueOnce(...)`).
+ */
+function spyAuth(real: AuthService) {
+	const service = spyOn(real, SERVICE_METHODS);
+	const admin = spyOn(real.admin, ADMIN_METHODS);
+	const session = Object.fromEntries(
+		SESSION_METHODS.map((method) => [
+			method,
+			vi.fn((token: string, ...args: unknown[]) =>
+				(real.session(token)[method] as AnyFn)(...args),
+			),
+		]),
+	) as SessionSpies;
+	const auth: AuthService = {
+		...service,
+		admin,
+		session: (token) =>
+			Object.fromEntries(
+				SESSION_METHODS.map((method) => [
+					method,
+					(...args: unknown[]) => (session[method] as AnyFn)(token, ...args),
+				]),
+			) as unknown as SessionAuth,
+	};
+	return { auth, service, session, admin };
+}
+
+/** The parameters of an emailed link (what the page's search would hold). */
+function linkParams(url: string): EmailLinkParams {
+	return Object.fromEntries(new URL(url).searchParams);
+}
+
 export type TestContextOptions = {
-	/** The signed-in user; `null` (default) means signed out. */
-	user?: AppUser | null;
-	/**
-	 * The session cookie's secret. Defaults to `aSession().secret` when a user is
-	 * signed in, since a signed-in request always carries it; `null` means no cookie.
-	 */
-	sessionSecret?: string | null;
 	/** The browser's language and theme (`ServerContext.browserPrefs`). */
 	browserPrefs?: Pick<AppPrefs, "locale" | "theme">;
 	clientIp?: string;
@@ -192,69 +152,105 @@ export type TestContextOptions = {
 	appUrl?: string;
 };
 
+type SeedOptions = {
+	email?: string;
+	password?: string;
+	name?: string;
+	/** Default `true`. */
+	verified?: boolean;
+	/** Default `DEFAULT_PREFS`. */
+	prefs?: Partial<AppPrefs>;
+	/** Puts the session in the request's cookie. Default `true`. */
+	signIn?: boolean;
+};
+
 /**
- * A `ServerContext` over typed fakes, plus handles to stub and assert on them:
- * `userAccount.get.mockResolvedValue(aUser())`.
+ * A `ServerContext` exactly as the auth middleware builds it, over a fresh
+ * memory backend. The handles stub and assert on it: `auth`, `session` and
+ * `admin` spy on every port method; `seedUser` / `seedGuest` create accounts
+ * without touching the spies; `emails` collects what was sent.
  */
 export function createTestContext({
-	user = null,
-	sessionSecret = user ? aSession().secret : null,
 	browserPrefs = { locale: "en", theme: "system" },
 	clientIp = "203.0.113.1",
 	userAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Firefox/140.0",
 	appUrl = "http://app.test",
 }: TestContextOptions = {}) {
-	const userAccount = fakeAccount();
-	const userTables = fakeTables();
-	const adminAccount = fakeAccount();
-	const anonymousAccount = fakeAccount();
-	const adminUsers = fakeUsers();
-	const adminTables = fakeTables();
+	const emails: SentEmail[] = [];
+	const backend = createMemoryBackend({
+		sendEmail: (email) => emails.push(email),
+	});
+	const real = backend.auth({ userAgent });
+	const spies = spyAuth(real);
 	const sessionCookie = new FakeSessionCookie();
-	sessionCookie.value = sessionSecret ?? undefined;
 	const preferenceCookies = new FakePreferenceCookies();
 	const rateLimit = vi.fn<ServerContext["rateLimit"]>();
 
-	const userAppClient = userClient(userAccount, userTables);
-	const admin = adminClient(adminAccount, adminUsers, adminTables);
-	const anonymous = userClient(anonymousAccount, fakeTables());
-
-	const forSession = vi.fn<ServerContext["appwrite"]["forSession"]>(
-		() => userAppClient,
-	);
-
-	const context: ServerContext = {
-		appwrite: {
-			forSession,
-			user: () => {
-				// Like the real context: whether there is a session cookie decides, not the user.
-				if (!sessionCookie.read()) throw new AppError("UNAUTHENTICATED");
-				return userAppClient;
-			},
-			admin: () => admin,
-			anonymous: () => anonymous,
-		},
-		getUser: async () => user,
+	const context = buildServerContext({
+		backend: { auth: () => spies.auth, data: backend.data },
 		sessionCookie,
 		preferenceCookies,
 		browserPrefs,
 		clientIp,
 		userAgent,
-		appLink: (path) => appLink(appUrl, path),
+		appUrl,
 		rateLimit,
-	};
+	});
+
+	/** The last emailed link's parameters, for `purpose`. */
+	function lastLink(purpose: SentEmail["purpose"]): EmailLinkParams {
+		const email = [...emails]
+			.reverse()
+			.find((sent) => sent.purpose === purpose);
+		if (!email) throw new Error(`no ${purpose} email was sent`);
+		return linkParams(email.url);
+	}
+
+	/** Finishes a seeded account: its session in the cookie, nothing in `emails`. */
+	async function seeded(session: AuthSession, signIn: boolean) {
+		emails.length = 0;
+		if (signIn) sessionCookie.value = session.token;
+		const user: User = await real.session(session.token).getUser();
+		return { user, session };
+	}
 
 	return {
 		context,
-		userAccount,
-		userTables,
-		adminAccount,
-		adminUsers,
-		adminTables,
-		anonymousAccount,
+		backend,
+		auth: spies.service,
+		session: spies.session,
+		admin: spies.admin,
+		emails,
+		lastLink,
 		sessionCookie,
 		preferenceCookies,
 		rateLimit,
-		forSession,
+		/** A registered account, straight in the store. */
+		async seedUser({
+			email = "user@example.test",
+			password = "password1",
+			name = "Test User",
+			verified = true,
+			prefs = DEFAULT_PREFS,
+			signIn = true,
+		}: SeedOptions = {}) {
+			const session = await real.signUp({ email, password, name });
+			const account = real.session(session.token);
+			await account.updatePrefs(prefs);
+			if (verified) {
+				await account.sendVerification({ redirectUrl: `${appUrl}/verify` });
+				await real.confirmVerification(lastLink("verification"));
+			}
+			return seeded(session, signIn);
+		},
+		/** A guest account, straight in the store. */
+		async seedGuest({
+			prefs = DEFAULT_PREFS,
+			signIn = true,
+		}: Pick<SeedOptions, "prefs" | "signIn"> = {}) {
+			const session = await real.startGuest();
+			await real.session(session.token).updatePrefs(prefs);
+			return seeded(session, signIn);
+		},
 	};
 }

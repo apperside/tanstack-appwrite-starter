@@ -5,6 +5,7 @@ A production-grade starting point for full-stack React apps on **[TanStack Start
 The official TanStack Start starter gives you routing, SSR and a demo page. This repo continues from there: authentication with server-side sessions, account management, a responsive app shell, i18n, a design system, an accessible form kit and a typed Appwrite data layer. It also ships with tests, performance budgets and a Docker image, so your first commit can be a feature of your own app.
 
 > Built for self-hosted Appwrite (TablesDB API). It also works with Appwrite Cloud.
+> The app talks to its backend only through small, typed ports, so Appwrite is one adapter among others: an in-memory backend ships too, and more can be plugged in. See [Backends](#backends).
 
 ---
 
@@ -18,6 +19,7 @@ The official TanStack Start starter gives you routing, SSR and a demo page. This
 - [Scripts](#scripts)
 - [Project structure](#project-structure)
 - [How it works](#how-it-works)
+- [Backends](#backends)
 - [Building your app on it](#building-your-app-on-it)
 - [Testing](#testing)
 - [Deployment](#deployment)
@@ -79,7 +81,7 @@ The official TanStack Start starter gives you routing, SSR and a demo page. This
 | Area | TanStack Start starter | This repo |
 |---|---|---|
 | Auth | — | SSR cookie sessions, guest/upgrade/merge, recovery, verification, onboarding, server-side route guards |
-| Backend | — | Appwrite via server functions, typed TablesDB wrapper, generated types |
+| Backend | — | Backend-neutral ports with Appwrite and in-memory adapters, contract tests; typed TablesDB wrapper and generated types for Appwrite |
 | Data fetching | TanStack Query + SSR integration | One typed definition per query ([`tanstack-query-typed`](https://github.com/apperside/tanstack-query-typed)), loader prefetch, typed cache |
 | Account | — | Profile, password, email, sessions, preferences |
 | UI | Demo pages, basic Tailwind | Design system, responsive app shell, shadcn/ui kit, error / not-found / loading states |
@@ -88,7 +90,7 @@ The official TanStack Start starter gives you routing, SSR and a demo page. This
 | Theme | Client-side toggle | Light/dark/system resolved on the server and saved to the account |
 | Security | — | Rate limiting, trusted-proxy client IP, open-redirect protection, no account enumeration, API key never reaches the browser |
 | Errors | — | One error model with stable codes and translated messages; unexpected errors logged on the server |
-| Testing | — | Vitest + Testing Library + axe, typed Appwrite fakes, coverage thresholds |
+| Testing | — | Vitest + Testing Library + axe, handler tests on the memory backend, adapter contract suites, typed Appwrite fakes, coverage thresholds |
 | Quality gates | — | Biome, knip, lefthook, bundle budget, Lighthouse CI, `pnpm verify` |
 | Performance | — | Gzipped HTML, pre-compressed assets, code-split heavy pieces, translations inlined in the SSR payload |
 | Deploy | — | Dockerfile, docker-compose, reverse-proxy guidance |
@@ -166,6 +168,8 @@ pnpm dev                        # http://localhost:3000
 
 Open `http://localhost:3000`. You'll be redirected to `/login`; sign up, or continue as a guest.
 
+**No Appwrite yet?** Run on the in-memory backend instead: `BACKEND=memory APP_URL=http://localhost:3000 pnpm dev`. Accounts live in the server process (gone on restart), and emailed links are printed to the server log.
+
 ---
 
 ## Configuration
@@ -174,13 +178,19 @@ All configuration lives in `.env.local`, validated at startup. A missing or inva
 
 | Variable | Scope | Description |
 |---|---|---|
+| `BACKEND` | server | The backend adapter: `appwrite` (default) or `memory` |
+| `VITE_REQUIRE_EMAIL_VERIFICATION` | public | `true` keeps unverified users on `/verify-email` until they verify. Default `false`: verification is offered but not enforced |
+| `APP_URL` | server | Public URL of the app, sub-path included. Recovery and verification links point here, and browsers without `Sec-Fetch-Site` may call server functions only from its origin (CSRF check) |
+| `TRUSTED_PROXY_HOPS` | server | Number of reverse proxies in front of the app that append to `X-Forwarded-For`. Default `0` uses the socket address |
+
+Each backend adapter validates its own variables, the first time it is used, so a backend you don't use needs none of them. For `BACKEND=appwrite`:
+
+| Variable | Scope | Description |
+|---|---|---|
 | `VITE_APPWRITE_ENDPOINT` | public | Appwrite endpoint, e.g. `https://appwrite.example.com/v1` |
 | `VITE_APPWRITE_PROJECT_ID` | public | Project id |
 | `VITE_APPWRITE_DATABASE_ID` | public | Database id |
-| `VITE_REQUIRE_EMAIL_VERIFICATION` | public | `true` keeps unverified users on `/verify-email` until they verify. Default `false`: verification is offered but not enforced |
 | `APPWRITE_API_KEY` | server | API key. Read only by server-only modules |
-| `APP_URL` | server | Public URL of the app, sub-path included. Recovery and verification links point here |
-| `TRUSTED_PROXY_HOPS` | server | Number of reverse proxies in front of the app that append to `X-Forwarded-For`. Default `0` uses the socket address |
 
 `VITE_*` values are inlined into the bundle at **build** time. The rest are read at **runtime** and never reach the browser.
 
@@ -218,17 +228,34 @@ src/
       _app/               App zone (shell): home, settings/*
     reset-password.tsx    Email-link pages work signed in or out
     verify-email.tsx
-  features/               One folder per feature
-    auth/                 Platform feature: sessions, guest, recovery, verification
-    account/              Profile, security, sessions, preferences
-    onboarding/
-  server/                 Middleware, cookies, rate limiter, requireUser, hooks
-  lib/                    Pure logic: guards, errors, redirect, theme, query client
-    appwrite/             Typed TablesDB wrapper, clients, generated types
-  components/
-    ui/                   shadcn/ui components
-    form/                 Form kit (useAppForm, fields, errors)
-    layout/               App shell, sidebar, auth layout, error states
+  client/                 Everything that renders
+    features/             UI per feature: pages, queries, mutations, hooks
+      auth/               Sessions, guest, recovery, verification
+      account/            Profile, security, sessions, preferences
+      onboarding/
+    components/
+      ui/                 shadcn/ui components
+      form/               Form kit (useAppForm, fields, errors)
+      layout/             App shell, sidebar, auth layout, error states
+    hooks/                Shared React hooks
+  core/                   The backend-neutral model, shared by client and server: no vendor imports
+    auth/                 User and session types, the auth ports, their contract tests
+    data/                 One repository port per table, pagination, contract tests
+    backend.ts            The `Backend` interface an adapter implements
+    prefs.ts              Account preferences
+  server/                 requireUser, hooks
+    api/                  Server functions per feature (`*.functions.ts` + handlers); `api.ts` lists them all
+    adapters/             One folder per backend, each implementing `Backend`
+      appwrite/           Account/Users/TablesDB adapter, clients, generated types, realtime
+      memory/             In-process backend for development, demos and tests
+    context/              The per-request server context: its types and how it is built
+    middlewares/          Auth (puts the context on server functions), CSRF, compression
+    functions/            Isomorphic preference reads for the routes
+    cookies/              Session and preference cookies
+    utils/                Rate limiter, client IP, app links, account prefs
+    backend.server.ts     Picks the adapter named by `BACKEND`
+  lib/                    Pure logic shared by both sides: guards, errors, redirect, theme, query client
+    schemas/              Zod schemas: the forms and the server-function validators
   i18n/                   i18next setup, locale resolution, en/it JSON
   test/                   Test kit: fake server context, fixtures, render helpers
   config/env.ts           Validated environment
@@ -243,19 +270,51 @@ docs/
 In short:
 
 - **Sessions.**
-  - Sign-in runs in a server function. The server creates the Appwrite session with the API key and stores its secret in an httpOnly, `SameSite=Lax` cookie.
+  - Sign-in runs in a server function. The server asks the backend for a session and stores its token in an httpOnly, `SameSite=Lax` cookie.
   - On every request, `authMiddleware` turns that cookie into a per-request context:
-    - `context.appwrite.user()` (acts as the user, so Appwrite's permissions apply);
-    - `context.appwrite.admin()`;
+    - `context.auth`: the backend's auth operations (sign in, sign up, links, admin);
+    - `context.session()`: acts as the cookie's session (name, email, password, prefs, sign-out);
+    - `context.data`: the repositories;
     - `context.getUser()`, memoized for the request.
-- **Server-first data.** Pages read and write through TanStack Start server functions that call Appwrite as the user. The browser talks to Appwrite directly only for realtime, using a short-lived JWT.
+- **Server-first data.** Pages read and write through TanStack Start server functions, which call the backend only through `context`. With Appwrite, the browser talks to it directly only for realtime, using a short-lived JWT.
 - **Queries.** Each query is defined once with `appQueryOptions`, prefetched in the route loader with `ensureQueryData` and read with `useSuspenseQuery`, so data is part of the server-rendered HTML.
 - **Guards.** `beforeLoad` on the route zones calls one pure function, `resolveGuardRedirect`, on both server and client:
   - signed out → `/login`;
   - email unverified (if required) → `/verify-email`;
   - onboarding not done → `/onboarding`.
 - **Errors.** Handlers just throw. The middleware turns every failure into an `AppError` with a stable code and a translation key, lets router redirects through, and logs anything unexpected.
-- **Preferences.** A signed-in user's language and theme live in their Appwrite account prefs. Cookies are only a cache so the first paint is right, and only the server writes them.
+- **Preferences.** A signed-in user's language and theme are stored with their account (Appwrite: account prefs). Cookies are only a cache so the first paint is right, and only the server writes them.
+
+---
+
+## Backends
+
+The app never imports a vendor SDK outside `src/server/adapters/`. Everything it needs from a backend is a port in `src/core/`:
+
+- **`AuthService` / `SessionAuth` / `AdminAuth`** (`src/core/auth/ports.ts`): sign-up, sign-in, guests and their upgrade, sessions, email and password changes, emailed links, preferences, and deleting users or sessions. Each method documents the `AppError` codes it may reject with.
+- **Repositories** (`src/core/data/`): one per table, e.g. `TodoRepository`. They take the owner's id and check ownership themselves, so they don't depend on a backend's permission model.
+- **`Backend`** (`src/core/backend.ts`) bundles them: `auth(request)` per request, `data` for the process.
+
+The surface started from what Appwrite can do, and grows when a feature needs more. Three rules keep it portable:
+
+- **Types are the app's.** `User`, `AuthSession`, `DeviceSession` and `Todo` are mapped from the vendor's shapes inside the adapter; `$id`, `Models.User` and friends never leave it.
+- **Ports describe outcomes, not vendor steps.** Upgrading a guest is one method, because Appwrite does it with two sessions while the memory backend keeps one. Policy that doesn't depend on the vendor (rate limits, cookies, hooks, not revealing whether an email exists) stays in the handlers.
+- **Adapters reject only with `AppError` codes.** The Appwrite adapter translates its exceptions (`translateErrors`), keeping the original as the error's `cause` for the logs.
+
+Emailed links are opaque: the backend appends its credential to the URL it is given (Appwrite adds `userId` and `secret`, the memory backend adds `token`), `/verify-email` and `/reset-password` pass every query parameter back untouched, and the adapter reads its own.
+
+**Shipped adapters**
+
+| `BACKEND` | What it is |
+|---|---|
+| `appwrite` | Account, Users and TablesDB APIs, with the API key on the server. Realtime in the browser through `withBrowserClient` (Appwrite only) |
+| `memory` | Everything in the server process: no service to run, nothing survives a restart, one store per server instance. Emails go to the server log. For development, demos, end-to-end runs and the test suite |
+
+**Adding a backend**
+
+1. Create `src/server/adapters/<name>/` with a `createXBackend(): Backend` that implements the ports (start from `src/server/adapters/memory/`, the smallest complete one).
+2. Run the contract suites against it, the same way `src/server/adapters/memory/backend.server.test.ts` does: `describeAuthContract("<name>", ...)` and `describeTodosContract("<name>", ...)`. They pin the behavior every adapter must share.
+3. Add the name to `BACKENDS` in `src/config/env.ts` and a case in `src/server/backend.server.ts`. Each adapter is imported on demand, so a server only loads the one it runs.
 
 ---
 
@@ -265,7 +324,7 @@ In short:
 
 - **Server-only code** lives in `*.server.ts`; the build fails if browser code imports it.
   - **Server functions** (`<feature>.functions.ts`) are thin `createServerFn` definitions that **dynamically import** their handler, so handler code never ships to the browser.
-  - **Handlers** (`<feature>.handlers.server.ts`) hold the logic and get Appwrite only from `context`, never from imports. That makes them trivially testable.
+  - **Handlers** (`<feature>.handlers.server.ts`) hold the logic and get the backend only from `context` (`context.auth`, `context.session()`, `context.data`), never from imports. That keeps them backend-neutral and trivially testable.
 - **Features are self-contained.** `auth` is the one platform feature others may import (its hooks, queries, schemas and server functions). Server logic that several features need lives in `src/server`.
 - **One definition per query** with `appQueryOptions`, registered in the typed query registry.
 - **Mutations:**
@@ -279,33 +338,30 @@ In short:
 
 Example: a `notes` feature.
 
-1. **Table.** Add it to `appwrite.json` with row security on (or create it in the console and run `pnpm appwrite:pull`), run `pnpm appwrite:push`, then `pnpm appwrite:types`, then register the table in `src/lib/appwrite/app-models.ts` (`App*` type, `AppTablesTypeMap`, `APP_TABLES`).
-2. **Feature folder** `src/features/notes/`:
-   - `notes.schemas.ts`: zod schemas shared by the form and the server function.
-   - `notes.handlers.server.ts`: handlers that start with `const user = await requireUser(context)` and use `context.appwrite.user().tables.typed`. Writes use `ownerPermissions(user.$id)`.
+1. **Repository.** Describe the table in `src/core/data/notes.ts` (`Note` type and `NoteRepository` port, scoped by owner like `TodoRepository`), add a contract suite next to it, and add it to `AppData` in `src/core/backend.ts`. Then implement it in each adapter:
+   - **Appwrite:** add the table to `appwrite.json` with row security on (or create it in the console and run `pnpm appwrite:pull`), run `pnpm appwrite:push` and `pnpm appwrite:types`, register it in `src/server/adapters/appwrite/app-models.ts` (`App*` type, `AppTablesTypeMap`, `APP_TABLES`), and write `notes.server.ts` like `todos.server.ts`.
+   - **Memory:** write `notes.server.ts` like `src/server/adapters/memory/todos.server.ts`.
+2. **Schemas:** `src/lib/schemas/notes.schemas.ts`: zod schemas shared by the form and the server function.
+3. **Server API** `src/server/api/notes/`:
+   - `notes.handlers.server.ts`: handlers that start with `const user = await requireUser(context)` and use `context.data.notes` with `user.id`.
    - `notes.handlers.server.test.ts`: tests with `createTestContext()`.
-   - `notes.functions.ts`: one `createServerFn(...).middleware([authMiddleware]).validator(schema)` per handler, dynamically importing the handler.
+   - `notes.functions.ts`: one `createServerFn(...).middleware([authMiddleware]).validator(schema)` per handler, dynamically importing the handler. Add them to `api` in `src/server/api/api.ts`.
+4. **Client feature** `src/client/features/notes/`:
    - `notes.queries.ts`: `appQueryOptions` plus the registry entries.
    - `components/`: the page, with `useSuspenseQuery` and `useAppForm`.
-3. **Strings:** `src/i18n/locales/{en,it}/notes.json`.
-4. **Route:** `src/routes/_authed/_app/notes.tsx`, with a loader that calls `ensureQueryData` and a skeleton `pendingComponent`. Add it to `src/components/layout/app-navigation.ts`.
-5. Run **`pnpm verify`**.
+5. **Strings:** `src/i18n/locales/{en,it}/notes.json`.
+6. **Route:** `src/routes/_authed/_app/notes.tsx`, with a loader that calls `ensureQueryData` and a skeleton `pendingComponent`. Add it to `src/client/components/layout/app-navigation.ts`.
+7. Run **`pnpm verify`**.
 
 ### Guest merge hook
 
-When a guest signs in to an existing account, the starter calls `serverHooks.onGuestMerge` in `src/server/server-hooks.server.ts`, then deletes the guest user. Move the guest's data there:
+When a guest signs in to an existing account, the starter calls `serverHooks.onGuestMerge` in `src/server/server-hooks.server.ts`, then deletes the guest user. Move the guest's data there, through the repositories, so the hook works on any backend. The default moves the example table:
 
 ```ts
 export const serverHooks = {
-  async onGuestMerge({ guestUserId, userId, admin }) {
-    const todos = await admin.tables.typed.listAllRows(APP_TABLES.TODOS, [
-      Query.equal("ownerId", guestUserId),
-    ]);
-    await admin.tables.typed.bulkUpsertRows(
-      APP_TABLES.TODOS,
-      todos.map((todo) => ({ ...todo, ownerId: userId })),
-      userId, // stamps owner permissions for the new owner
-    );
+  async onGuestMerge({ guestUserId, userId, data }) {
+    await data.todos.transferOwnership(guestUserId, userId);
+    // await data.notes.transferOwnership(guestUserId, userId);
   },
 };
 ```
@@ -314,11 +370,11 @@ The hook must be **idempotent**: if it throws, the guest is kept and the user ca
 
 ### Data model
 
-`appwrite.json` is the schema. The repo ships a minimal `todos` table (title, completed, priority, due date, owner) as an example, in a database with id `app`.
+With Appwrite, `appwrite.json` is the schema. The repo ships a minimal `todos` table (title, completed, priority, due date, owner) as an example, in a database with id `app`.
 
 1. Set `projectId` in `appwrite.json` (it ships with the placeholder `your-project-id`).
 2. `pnpm appwrite:push` creates the tables in your project.
-3. `pnpm appwrite:types` generates `src/lib/appwrite/generated/appwrite.ts` from the local file.
+3. `pnpm appwrite:types` generates `src/server/adapters/appwrite/generated/appwrite.ts` from the local file.
 
 Replace `todos` with your own tables in `appwrite.json` and run `pnpm appwrite:types` again. If you edit the schema in the console instead, `pnpm appwrite:pull` syncs the file.
 
@@ -332,9 +388,10 @@ pnpm test:watch
 pnpm verify        # everything, including the production build and budgets
 ```
 
-- **Server handlers** are tested with `createTestContext()`, a fake request context whose Appwrite clients are `vi.fn()`s **typed against the real SDK**. A signature change in the SDK breaks the tests at compile time. Errors are genuine `AppwriteException`s (`appwriteError("user_invalid_credentials")`).
+- **Server handlers** are tested with `createTestContext()`: the real request context over a fresh **memory backend**, so a test signs up, emails a link and follows it for real (`seedUser()`, `seedGuest()`, `lastLink("recovery")`). Every port method is a spy that calls through, to assert on calls or make one fail (`session.updatePrefs.mockRejectedValueOnce(...)`).
+- **Adapters** run the shared **contract suites** (`describeAuthContract`, `describeTodosContract`). The Appwrite adapter is also tested against SDK fakes **typed against the real SDK** (`src/test/appwrite-fakes.ts`), so a signature change in the SDK breaks the tests at compile time; errors are genuine `AppwriteException`s (`appwriteError("user_invalid_credentials")`).
 - **Components** are tested with Testing Library through `renderWithProviders()` (i18n + Query), and every page-level test runs an **axe** accessibility check.
-- **Coverage thresholds:** ≥ 90% on server and logic code, ≥ 80% on components.
+- **Coverage thresholds:** ≥ 90% on server, core and logic code, ≥ 85% branches on adapters, ≥ 80% on components.
 - **What fakes can't prove** (real permissions, real emails) is covered by the [smoke checklist](docs/smoke-checklist.md), which you run against a real Appwrite instance.
 
 ---

@@ -5,8 +5,8 @@ import {
 } from "@tanstack/react-router";
 import { lazy, Suspense, useLayoutEffect } from "react";
 import type { TypedQueryClient } from "tanstack-query-typed";
-import { Toasts } from "#/components/ui/toast";
-import { currentUserQuery } from "#/features/auth/auth.queries";
+import { Toasts } from "#/client/components/ui/toast";
+import { currentUserQuery } from "#/client/features/auth/auth.queries";
 import { loadResources } from "#/i18n/i18n";
 import { I18nProvider } from "#/i18n/i18n-provider";
 import { DEFAULT_LOCALE, resolveLocale } from "#/i18n/locale";
@@ -15,13 +15,12 @@ import {
 	resolveThemePreference,
 	themeInitScript,
 } from "#/lib/theme";
-import { getLocaleHints } from "#/server/locale-preference";
-import { getThemePreference } from "#/server/theme-preference";
-import appCss from "../styles.css?url";
+import { api } from "#/server/api/api";
+import appCss from "#/styles.css?url";
 
 // DEV only: the condition is statically false in production builds, so the chunk is dropped.
 const AppDevtools = import.meta.env.DEV
-	? lazy(() => import("../integrations/devtools"))
+	? lazy(() => import("#/integrations/devtools"))
 	: null;
 
 interface MyRouterContext {
@@ -43,8 +42,8 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 					await loadResources(DEFAULT_LOCALE);
 					throw error;
 				}),
-			getThemePreference(),
-			getLocaleHints(),
+			api.preferences.getThemePreference(),
+			api.preferences.getLocaleHints(),
 		]);
 		// The account's preferences win; the cookies are the first-paint cache
 		// for everyone else (R39).

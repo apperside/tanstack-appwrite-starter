@@ -1,8 +1,8 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
-import { PageSkeleton } from "#/components/layout/page-skeleton";
-import { emailLinkSearchSchema } from "#/features/auth/auth.schemas";
-import { VerifyEmailPage } from "#/features/auth/components/verify-email-page";
+import { PageSkeleton } from "#/client/components/layout/page-skeleton";
+import { VerifyEmailPage } from "#/client/features/auth/components/verify-email-page";
 import { resolveVerifyEmailRedirect } from "#/lib/guards";
+import { emailLinkSearchSchema } from "#/lib/schemas/auth.schemas";
 
 // Top-level, outside the zones: a verification link works signed in or not.
 export const Route = createFileRoute("/verify-email")({
@@ -13,7 +13,7 @@ export const Route = createFileRoute("/verify-email")({
 		if (cause === "stay") return;
 		const href = resolveVerifyEmailRedirect({
 			user: context.user,
-			hasLink: Boolean(search.userId && search.secret),
+			hasLink: Object.keys(search).length > 0,
 		});
 		if (href) throw redirect({ href });
 	},
@@ -22,6 +22,5 @@ export const Route = createFileRoute("/verify-email")({
 });
 
 function VerifyEmail() {
-	const { userId, secret } = Route.useSearch();
-	return <VerifyEmailPage userId={userId} secret={secret} />;
+	return <VerifyEmailPage link={Route.useSearch()} />;
 }

@@ -46,8 +46,10 @@ this list against a real instance before a release.
   - Open the recovery link and set a new password. Signing in works with the
     new password and fails with the old one.
   - Opening the same link again shows the invalid-link state.
+  - Every session the user had before the reset is gone from the console.
 - [ ] **Change password:** Security → Update password shows a success toast.
   The old password is rejected and the new one works, on another device too.
+  Only this device's session remains: the other device is sent to `/login`.
 - [ ] **Change email:** Profile → Change email (requires the current
   password). The console shows the new email on the same user id, and a
   verification email arrives at the new address.
@@ -55,4 +57,7 @@ this list against a real instance before a release.
   out everywhere → confirm. The user has 0 sessions. This device lands on
   `/login`, and the other one is sent to `/login?redirect=…` on its next
   navigation.
+- [ ] **Cross-origin POST:** `curl -i -X POST -H 'Origin: https://evil.test'
+  <APP_URL>/_serverFn/x` answers `403`. Over https, the session cookie is
+  named `__Host-app_session` in devtools.
 - [ ] **Clean up:** delete every test user.

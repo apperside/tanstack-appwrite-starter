@@ -12,7 +12,7 @@ const notOnboarded = { onboardingCompleted: false } as const;
 
 function user(prefs: typeof onboarded | typeof notOnboarded, verified = true) {
 	return aUser({
-		emailVerification: verified,
+		emailVerified: verified,
 		prefs: { ...aUser().prefs, ...prefs },
 	});
 }

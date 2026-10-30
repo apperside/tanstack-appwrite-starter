@@ -5,7 +5,11 @@ import { Route as LoginRoute } from "./login";
 import { Route as PublicRoute } from "./route";
 import { Route as SignupRoute } from "./signup";
 
-vi.mock("#/features/auth/auth.functions", () => ({}));
+vi.mock("#/server/api/auth/auth.functions", async (importOriginal) => ({
+	...(await importOriginal<
+		typeof import("#/server/api/auth/auth.functions")
+	>()),
+}));
 
 describe("/_public guard", () => {
 	it("sends a signed-in user straight to a sanitized `redirect`", async () => {

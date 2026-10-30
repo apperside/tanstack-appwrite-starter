@@ -15,7 +15,7 @@
 		"typecheck": "tsc --noEmit",
 		"lint": "biome check .",
 		"knip": "knip",
-		"appwrite:types": "appwrite types --config-file appwrite.json --language ts --force src/lib/appwrite/generated && mv src/lib/appwrite/generated/appwrite.d.ts src/lib/appwrite/generated/appwrite.ts",
+		"appwrite:types": "appwrite types --config-file appwrite.json --language ts --force src/server/adapters/appwrite/generated && mv src/server/adapters/appwrite/generated/appwrite.d.ts src/server/adapters/appwrite/generated/appwrite.ts",
 		"appwrite:pull": "appwrite pull tables --force --config-file appwrite.json",
 		"appwrite:push": "appwrite push tables --config-file appwrite.json",
 		"test": "vitest run --coverage",

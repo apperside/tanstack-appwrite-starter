@@ -9,10 +9,12 @@ function emptyAsUnset<T extends z.ZodMiniType>(schema: T) {
 	);
 }
 
+// Each backend adapter parses its own variables (e.g. `#/adapters/appwrite/env`).
+
+/** The backend adapters `#/server/backend.server` can load. */
+export const BACKENDS = ["appwrite", "memory"] as const;
+
 const publicSchema = z.object({
-	VITE_APPWRITE_ENDPOINT: z.url(),
-	VITE_APPWRITE_PROJECT_ID: z.string().check(z.minLength(1)),
-	VITE_APPWRITE_DATABASE_ID: z.string().check(z.minLength(1)),
 	// Empty string (e.g. a copied .env.example) counts as unset.
 	VITE_REQUIRE_EMAIL_VERIFICATION: emptyAsUnset(
 		z._default(z.stringbool(), false),
@@ -20,7 +22,8 @@ const publicSchema = z.object({
 });
 
 const serverSchema = z.object({
-	APPWRITE_API_KEY: z.string().check(z.minLength(1)),
+	// Empty string counts as unset.
+	BACKEND: emptyAsUnset(z._default(z.enum(BACKENDS), "appwrite")),
 	APP_URL: z.url(),
 	// Empty string counts as unset.
 	TRUSTED_PROXY_HOPS: emptyAsUnset(
@@ -43,7 +46,7 @@ function describeIssue(issue: z.core.$ZodIssue): string {
 }
 
 /** Throws an error naming every missing or invalid variable. */
-function parseOrThrow<T extends z.ZodMiniType>(
+export function parseOrThrow<T extends z.ZodMiniType>(
 	schema: T,
 	raw: Record<string, unknown>,
 	label: string,
@@ -59,9 +62,6 @@ function parseOrThrow<T extends z.ZodMiniType>(
 export function parsePublicEnv(raw: Record<string, unknown>) {
 	const env = parseOrThrow(publicSchema, raw, "public");
 	return {
-		APPWRITE_ENDPOINT: env.VITE_APPWRITE_ENDPOINT,
-		APPWRITE_PROJECT_ID: env.VITE_APPWRITE_PROJECT_ID,
-		APPWRITE_DATABASE_ID: env.VITE_APPWRITE_DATABASE_ID,
 		REQUIRE_EMAIL_VERIFICATION: env.VITE_REQUIRE_EMAIL_VERIFICATION,
 	};
 }

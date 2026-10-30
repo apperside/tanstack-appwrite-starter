@@ -15,7 +15,7 @@
 			"**/vitest.config.ts",
 			"**/scripts/**/*",
 			"!**/src/routeTree.gen.ts",
-			"!**/src/lib/appwrite/generated",
+			"!**/src/server/adapters/appwrite/generated",
 			"!**/src/styles.css",
 			"!**/coverage"
 		]
@@ -32,6 +32,39 @@
 			"suspicious": { "noExplicitAny": "error" }
 		}
 	},
+	"overrides": [
+		{
+			"includes": [
+				"src/**",
+				"!src/server/**",
+				"!src/test/**",
+				"!src/start.ts",
+				"!**/*.test.ts",
+				"!**/*.test.tsx"
+			],
+			"linter": {
+				"rules": {
+					"style": {
+						"noRestrictedImports": {
+							"level": "error",
+							"options": {
+								"patterns": [
+									{
+										"group": [
+											"#/server/**",
+											"**/server/**",
+											"!#/server/api/api"
+										],
+										"message": "Client code reaches the server only through `api` (#/server/api/api)."
+									}
+								]
+							}
+						}
+					}
+				}
+			}
+		}
+	],
 	"javascript": {
 		"formatter": {
 			"quoteStyle": "double"

@@ -20,6 +20,8 @@ export default defineConfig({
 					name: "node",
 					environment: "node",
 					include: ["src/**/*.test.ts"],
+					// PGlite's WASM start-up plus migrations can outlast the default 10s.
+					hookTimeout: 30_000,
 					setupFiles,
 				},
 			},

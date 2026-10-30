@@ -5,6 +5,7 @@ import { OWASP_SCRYPT, type ScryptCost } from "../shared/passwords.server";
 import { createPostgresAuth } from "./auth.server";
 import { connectPostgres, type PostgresDb } from "./db.server";
 import { postgresEnv } from "./env";
+import { fromPostgresError } from "./errors";
 import { migratePostgres } from "./migrate.server";
 import { createPostgresTodos } from "./todos.server";
 
@@ -43,6 +44,6 @@ export async function createPostgresBackendFromEnv(): Promise<Backend> {
 		return createPostgresBackend({ db });
 	} catch (error) {
 		await sql.end().catch(() => {});
-		throw error;
+		throw fromPostgresError(error);
 	}
 }

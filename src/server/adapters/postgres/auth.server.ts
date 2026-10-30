@@ -22,6 +22,7 @@ import { describeUserAgent } from "../shared/user-agent";
 import type { PostgresDb } from "./db.server";
 import { translateErrors } from "./errors";
 import { emailLinks, sessions, users } from "./schema";
+import { isUuid } from "./uuid";
 
 export type PostgresAuthOptions = {
 	db: PostgresDb;
@@ -34,8 +35,6 @@ export type PostgresAuthOptions = {
 
 type UserRow = typeof users.$inferSelect;
 type Tx = Parameters<Parameters<PostgresDb["transaction"]>[0]>[0];
-
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const byEmail = (email: string) => sql`lower(${users.email}) = lower(${email})`;
 
@@ -304,7 +303,7 @@ export function createPostgresAuth({
 	const admin = translateErrors<AdminAuth>({
 		deleteUser: async (userId) => {
 			// The id column is a uuid: anything else cannot name a user.
-			const deleted = UUID.test(userId)
+			const deleted = isUuid(userId)
 				? await db
 						.delete(users)
 						.where(eq(users.id, userId))
@@ -314,7 +313,7 @@ export function createPostgresAuth({
 		},
 		deleteSession: async ({ userId, sessionId }) => {
 			const deleted =
-				UUID.test(userId) && UUID.test(sessionId)
+				isUuid(userId) && isUuid(sessionId)
 					? await db
 							.delete(sessions)
 							.where(

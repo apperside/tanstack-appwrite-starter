@@ -67,4 +67,18 @@ describe("getSendEmail", () => {
 		expect(info).toHaveBeenCalledTimes(1);
 		vi.unstubAllEnvs();
 	});
+
+	it("warns once in production when mail only goes to the log", async () => {
+		vi.resetModules();
+		const { getSendEmail: fresh } = await import("./mailer.server");
+		vi.spyOn(console, "info").mockImplementation(() => {});
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+		vi.stubEnv("MAIL_PROVIDER", "console");
+		vi.stubEnv("NODE_ENV", "production");
+		const sendEmail = fresh();
+		await sendEmail(email);
+		await sendEmail(email);
+		expect(warn).toHaveBeenCalledTimes(1);
+		vi.unstubAllEnvs();
+	});
 });

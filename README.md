@@ -327,11 +327,10 @@ Emailed links are opaque: the backend appends its credential to the URL it is gi
 
 **Running the Postgres backend**
 
-It stores users, sessions, verification and recovery tokens (only their hashes) and todos. Migrations live in `src/server/adapters/postgres/migrations/` and are applied with `pnpm db:migrate`.
+It stores users, sessions, verification and recovery tokens (only their hashes) and todos. Migrations live in `src/server/adapters/postgres/migrations/` and are applied automatically when the app starts. `pnpm db:migrate` runs them by hand and needs `DATABASE_URL` set in the shell (drizzle-kit does not read `.env.local`).
 
 ```bash
 pnpm dev:infra        # Postgres on :5432, Mailpit on :1025 (SMTP) and :8025 (web UI)
-pnpm db:migrate
 BACKEND=postgres DATABASE_URL=postgres://app:app@localhost:5432/app \
   MAIL_PROVIDER=smtp SMTP_HOST=localhost SMTP_PORT=1025 MAIL_FROM="App <no-reply@app.test>" \
   APP_URL=http://localhost:3000 pnpm dev
@@ -453,7 +452,7 @@ docker compose --env-file .env.local up --build    # app on :3000
 
 - `--env-file` is required: the `VITE_*` values become build arguments. Server secrets are read at runtime from `env_file` and never enter the image.
 - The compose file runs only the app by default; Appwrite runs separately.
-- **With Postgres and Mailpit:** `docker compose --profile postgres --env-file .env.local up --build`, with `BACKEND=postgres`, `DATABASE_URL=postgres://app:app@postgres:5432/app`, `MAIL_PROVIDER=smtp`, `SMTP_HOST=mailpit` and `SMTP_PORT=1025` in `.env.local`. Apply migrations first with `pnpm db:migrate` against the published port. In production, point `DATABASE_URL` at your own database and use a real mail provider.
+- **With Postgres and Mailpit:** `docker compose --profile postgres --env-file .env.local up --build`, with `BACKEND=postgres`, `DATABASE_URL=postgres://app:app@postgres:5432/app`, `MAIL_PROVIDER=smtp`, `SMTP_HOST=mailpit` and `SMTP_PORT=1025` in `.env.local`. Migrations apply when the app starts. In production, point `DATABASE_URL` at your own database and use a real mail provider.
 - **Behind a reverse proxy** (TLS, a domain):
   - set `TRUSTED_PROXY_HOPS` to the number of proxies that append to `X-Forwarded-For`, usually `1`, otherwise rate limiting sees the proxy's IP for everyone;
   - set `APP_URL` to the public URL.

@@ -8,6 +8,7 @@ describe("fromPostgresError", () => {
 		["ECONNREFUSED", "NETWORK"],
 		["57P01", "NETWORK"],
 		["08006", "NETWORK"],
+		["CONNECTION_CLOSED", "NETWORK"],
 		["42P01", "UNKNOWN"],
 	])("maps %s to %s and keeps the cause", (code, expected) => {
 		const original = { code };

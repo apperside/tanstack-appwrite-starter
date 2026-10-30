@@ -6,6 +6,7 @@ import { AppError } from "#/lib/errors";
 import type { PostgresDb } from "./db.server";
 import { translateErrors } from "./errors";
 import { todos } from "./schema";
+import { isUuid } from "./uuid";
 
 type Row = typeof todos.$inferSelect;
 
@@ -29,7 +30,8 @@ const toCursor = (seq: number) =>
 function fromCursor(cursor: string | undefined): number | undefined {
 	if (!cursor) return undefined;
 	const text = Buffer.from(cursor, "base64url").toString();
-	return /^\d+$/.test(text) ? Number(text) : undefined;
+	const seq = /^\d+$/.test(text) ? Number(text) : Number.NaN;
+	return Number.isSafeInteger(seq) ? seq : undefined;
 }
 
 /** The todos table in Postgres, newest first (by insertion order). */
@@ -65,6 +67,7 @@ export function createPostgresTodos({
 			};
 		},
 		get: async (ownerId, id) => {
+			if (!isUuid(id)) throw new AppError("NOT_FOUND");
 			const [row] = await db
 				.select()
 				.from(todos)
@@ -89,6 +92,7 @@ export function createPostgresTodos({
 			return toTodo(row);
 		},
 		update: async (ownerId, id, patch) => {
+			if (!isUuid(id)) throw new AppError("NOT_FOUND");
 			const { dueDate, ...rest } = patch;
 			const [row] = await db
 				.update(todos)
@@ -105,6 +109,7 @@ export function createPostgresTodos({
 			return toTodo(row);
 		},
 		delete: async (ownerId, id) => {
+			if (!isUuid(id)) throw new AppError("NOT_FOUND");
 			const rows = await db
 				.delete(todos)
 				.where(and(eq(todos.id, id), eq(todos.ownerId, ownerId)))

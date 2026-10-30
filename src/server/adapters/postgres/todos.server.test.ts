@@ -35,6 +35,25 @@ describe("postgres todos", () => {
 		expect(items.map((todo) => todo.title)).toEqual(["a"]);
 	});
 
+	it.each(
+		["100000000000000000000", "1e+21"].map((text) =>
+			Buffer.from(text).toString("base64url"),
+		),
+	)("reads an unsafe cursor (%s) as the first page", async (cursor) => {
+		const todos = await freshTodos();
+		await todos.create("ann", { title: "a" });
+		const { items } = await todos.list("ann", { cursor });
+		expect(items).toHaveLength(1);
+	});
+
+	it("answers NOT_FOUND for an id that is not a uuid", async () => {
+		const todos = await freshTodos();
+		const gone = { code: "NOT_FOUND" };
+		await expect(todos.get("ann", "nope")).rejects.toMatchObject(gone);
+		await expect(todos.update("ann", "nope", {})).rejects.toMatchObject(gone);
+		await expect(todos.delete("ann", "nope")).rejects.toMatchObject(gone);
+	});
+
 	it("never leaks another owner's rows through a cursor", async () => {
 		const todos = await freshTodos();
 		for (const title of ["a", "b"]) await todos.create("ann", { title });

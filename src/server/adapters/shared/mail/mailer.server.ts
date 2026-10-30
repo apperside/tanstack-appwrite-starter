@@ -50,6 +50,11 @@ let mailer: Promise<SendEmail> | undefined;
 async function buildMailer(): Promise<SendEmail> {
 	try {
 		const { MAIL_PROVIDER, MAIL_FROM } = mailEnv();
+		if (MAIL_PROVIDER === "console" && process.env.NODE_ENV === "production") {
+			console.warn(
+				"MAIL_PROVIDER=console: verification and recovery links go only to this server's log.",
+			);
+		}
 		return createMailer({
 			transport: await loadTransport(MAIL_PROVIDER),
 			from: MAIL_FROM,

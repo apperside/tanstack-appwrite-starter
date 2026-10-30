@@ -236,13 +236,11 @@ export function createPostgresAuth({
 			// confirms the current one.
 			updateEmail: async ({ email, password }) => {
 				const { user } = await current();
-				if (
-					user.passwordHash &&
-					!(await verifyPassword(password, user.passwordHash))
-				) {
+				const isGuest = user.email === null;
+				if (!isGuest && !(await verifyPassword(password, user.passwordHash))) {
 					throw new AppError("INVALID_CREDENTIALS");
 				}
-				const newHash = user.passwordHash ? null : await hash(password);
+				const newHash = isGuest ? await hash(password) : null;
 				await db.transaction(async (tx) => {
 					await tx
 						.update(users)

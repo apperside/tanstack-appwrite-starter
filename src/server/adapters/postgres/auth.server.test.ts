@@ -258,4 +258,15 @@ describe("postgres auth", () => {
 		});
 		expect(emails.at(-1)?.locale).toBe("it");
 	});
+
+	it("rejects updateEmail for a registered user without a password hash", async () => {
+		const { auth } = await harness();
+		const { token } = await auth.signUp(ann);
+		await testDb.client.exec("update users set password_hash = null");
+		await expect(
+			auth
+				.session(token)
+				.updateEmail({ email: "new@example.test", password: "anything1" }),
+		).rejects.toMatchObject({ code: "INVALID_CREDENTIALS" });
+	});
 });

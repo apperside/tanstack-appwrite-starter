@@ -217,16 +217,14 @@ export function createMemoryAuth({ now, sendEmail }: MemoryAuthOptions) {
 			// confirms the current one.
 			updateEmail: async ({ email, password }) => {
 				const { user } = current();
-				if (
-					user.passwordHash &&
-					!(await verifyPassword(password, user.passwordHash))
-				) {
+				const isGuest = user.email === "";
+				if (!isGuest && !(await verifyPassword(password, user.passwordHash))) {
 					throw new AppError("INVALID_CREDENTIALS");
 				}
 				assertEmailFree(email, user.id);
 				user.email = email;
 				user.emailVerified = false;
-				user.passwordHash ??= await hash(password);
+				if (isGuest) user.passwordHash = await hash(password);
 			},
 			updatePassword: async ({ password, oldPassword }) => {
 				const user = registered();

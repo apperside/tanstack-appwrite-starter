@@ -139,6 +139,11 @@ function parseCsv(filePath: string): Task[] {
   return tasks;
 }
 
+// Extract parent ID from parent string (e.g., "Epic #39: MVP" -> "39")
+function getParentId(task: Task): string | null {
+  return task.parent?.match(/#(\d+)/)?.[1] ?? null;
+}
+
 function buildHierarchy(tasks: Task[]): Task[] {
   const taskMap = new Map<string, Task>();
   
@@ -151,20 +156,10 @@ function buildHierarchy(tasks: Task[]): Task[] {
   const rootTasks: Task[] = [];
   
   for (const task of tasks) {
-    if (task.parent && task.parent.trim() !== '') {
-      // Extract parent ID from parent string (e.g., "Epic #39: MVP" -> "39")
-      const parentIdMatch = task.parent.match(/#(\d+)/);
-      if (parentIdMatch) {
-        const parentId = parentIdMatch[1];
-        const parent = taskMap.get(parentId);
-        if (parent) {
-          parent.children.push(task);
-        } else {
-          rootTasks.push(task);
-        }
-      } else {
-        rootTasks.push(task);
-      }
+    const parentId = getParentId(task);
+    const parent = parentId ? taskMap.get(parentId) : undefined;
+    if (parent) {
+      parent.children.push(task);
     } else {
       rootTasks.push(task);
     }
@@ -291,80 +286,72 @@ function getTotalAvailableHours(userId: number, date: Date): number {
   return slots.reduce((total, [start, end]) => total + (end - start), 0);
 }
 
+const HOUR_MS = 60 * 60 * 1000;
+
+// The earliest free time window at or after `from`, searching up to `maxLookaheadDays` ahead
+function findNextSlot(userId: number, from: Date, maxLookaheadDays: number): [Date, Date] | null {
+  const day = new Date(from);
+  for (let i = 0; i < maxLookaheadDays; i++) {
+    for (const [startHour, endHour] of getAvailableHours(userId, day)) {
+      const slotStart = new Date(day);
+      slotStart.setHours(startHour, 0, 0, 0);
+      const slotEnd = new Date(day);
+      slotEnd.setHours(endHour, 0, 0, 0);
+      if (slotEnd > from) {
+        return [slotStart > from ? slotStart : new Date(from), slotEnd];
+      }
+    }
+    day.setDate(day.getDate() + 1);
+    day.setHours(0, 0, 0, 0);
+  }
+  return null;
+}
+
 function scheduleTask(
   task: Task,
-  currentDate: Date,
   userSchedules: Map<number, Date>,
   maxLookaheadDays: number = 365
 ): JobItem[] {
   const result: JobItem[] = [];
   const userIds = [4, 5]; // Available users
   
-  let remainingWork = task.remainingWork;
-  let attemptedDays = 0;
+  // Give the whole task to the user who can start it the earliest;
+  // each schedule is that user's next free moment
+  let userId: number | null = null;
+  let slot: [Date, Date] | null = null;
+  for (const id of userIds) {
+    const candidate = findNextSlot(id, userSchedules.get(id)!, maxLookaheadDays);
+    if (candidate && (!slot || candidate[0] < slot[0])) {
+      userId = id;
+      slot = candidate;
+    }
+  }
   
-  while (remainingWork > 0 && attemptedDays < maxLookaheadDays) {
-    // Find the user with the earliest available slot
-    let bestUserId: number | null = null;
-    let earliestDate: Date | null = null;
+  if (userId === null || !slot) return result;
+  
+  if (task.effectiveDueDate && slot[0] > task.effectiveDueDate) {
+    console.warn(`Warning: Task ${task.id} "${task.subject}" cannot be completed by due date ${task.effectiveDueDate.toLocaleDateString()}`);
+  }
+  
+  let remainingWork = task.remainingWork;
+  
+  while (remainingWork > 0 && slot) {
+    const [startDateTime, slotEnd] = slot;
+    const workInSlot = Math.min(remainingWork, (slotEnd.getTime() - startDateTime.getTime()) / HOUR_MS);
+    const finishDateTime = new Date(startDateTime.getTime() + workInSlot * HOUR_MS);
     
-    for (const userId of userIds) {
-      const userCurrentDate = userSchedules.get(userId) || new Date(currentDate);
-      if (!earliestDate || userCurrentDate < earliestDate) {
-        earliestDate = userCurrentDate;
-        bestUserId = userId;
-      }
-    }
+    result.push({
+      projectItemId: task.id,
+      assignees: [userId.toString()],
+      startDateTime: startDateTime.toISOString(),
+      finishDateTime: finishDateTime.toISOString(),
+      percentageDone: 0,
+      ownerUserId: [userId.toString()],
+    });
     
-    if (!bestUserId || !earliestDate) break;
-    
-    const userId = bestUserId;
-    const workDate = new Date(earliestDate);
-    
-    // Check if this date exceeds the task's due date
-    if (task.effectiveDueDate && workDate > task.effectiveDueDate) {
-      console.warn(`Warning: Task ${task.id} "${task.subject}" cannot be completed by due date ${task.effectiveDueDate.toLocaleDateString()}`);
-    }
-    
-    const availableSlots = getAvailableHours(userId, workDate);
-    
-    if (availableSlots.length === 0) {
-      // No availability today, move to next day
-      workDate.setDate(workDate.getDate() + 1);
-      userSchedules.set(userId, workDate);
-      attemptedDays++;
-      continue;
-    }
-    
-    // Allocate work to available slots
-    for (const [startHour, endHour] of availableSlots) {
-      if (remainingWork <= 0) break;
-      
-      const slotDuration = endHour - startHour;
-      const workInSlot = Math.min(remainingWork, slotDuration);
-      
-      const startDateTime = new Date(workDate);
-      startDateTime.setHours(startHour, 0, 0, 0);
-      
-      const finishDateTime = new Date(workDate);
-      finishDateTime.setHours(startHour + workInSlot, 0, 0, 0);
-      
-      result.push({
-        projectItemId: task.id,
-        assignees: [userId.toString()],
-        startDateTime: startDateTime.toISOString(),
-        finishDateTime: finishDateTime.toISOString(),
-        percentageDone: 0,
-        ownerUserId: [userId.toString()],
-      });
-      
-      remainingWork -= workInSlot;
-    }
-    
-    // Move to next day for this user
-    workDate.setDate(workDate.getDate() + 1);
-    userSchedules.set(userId, workDate);
-    attemptedDays++;
+    remainingWork -= workInSlot;
+    userSchedules.set(userId, finishDateTime);
+    slot = remainingWork > 0 ? findNextSlot(userId, finishDateTime, maxLookaheadDays) : null;
   }
   
   return result;
@@ -383,7 +370,7 @@ function createWorkPlan(tasks: Task[]): JobItem[] {
   userSchedules.set(5, new Date(today));
   
   for (const task of tasks) {
-    const jobItems = scheduleTask(task, today, userSchedules);
+    const jobItems = scheduleTask(task, userSchedules);
     workPlan.push(...jobItems);
   }
   
@@ -391,7 +378,7 @@ function createWorkPlan(tasks: Task[]): JobItem[] {
 }
 
 function main() {
-  const csvPath = '/mnt/user-data/uploads/OpenProject_Work_packages_2025-11-2220251122-176-6qc1aw.csv';
+  const csvPath = '/Users/simone/dev/tanstack/my-tanstack-app.worktrees/tasker/docs/tasks/2026-10-28-foundations.csv';
   
   console.log('Parsing CSV...');
   const tasks = parseCsv(csvPath);
@@ -418,7 +405,7 @@ function main() {
   console.log(`\nGenerated ${workPlan.length} work assignments`);
   
   // Save to file
-  const outputPath = '/mnt/user-data/outputs/work-plan.json';
+  const outputPath = '/Users/simone/dev/tanstack/my-tanstack-app.worktrees/tasker/docs/tasks/work-plan.json';
   fs.writeFileSync(outputPath, JSON.stringify(workPlan, null, 2));
   console.log(`\nWork plan saved to: ${outputPath}`);
   
@@ -446,7 +433,7 @@ function main() {
   });
   
   // Also save a human-readable version
-  const readablePath = '/mnt/user-data/outputs/work-plan-summary.txt';
+  const readablePath = '/Users/simone/dev/tanstack/my-tanstack-app.worktrees/tasker/docs/tasks/work-plan-summary.txt';
   const readableContent = Object.keys(summary).sort().map(date => {
     const items = summary[date].map(item => {
       const task = tasks.find(t => t.id === item.projectItemId);
@@ -460,6 +447,14 @@ function main() {
   
   fs.writeFileSync(readablePath, readableContent);
   console.log(`Summary saved to: ${readablePath}`);
+
+  // Data for gantt-chart.html, as a script so it loads from file:// without a server
+  const taskData = Object.fromEntries(
+    tasks.map(t => [t.id, { Subject: t.subject, Type: t.type, Project: t.project, Priority: t.priority, ParentId: getParentId(t) }])
+  );
+  const ganttDataPath = '/Users/simone/dev/tanstack/my-tanstack-app.worktrees/tasker/docs/tasks/gantt-data.js';
+  fs.writeFileSync(ganttDataPath, `window.ganttData = ${JSON.stringify({ workPlan, taskData }, null, 2)};\n`);
+  console.log(`Gantt data saved to: ${ganttDataPath}`);
 }
 
 main();
